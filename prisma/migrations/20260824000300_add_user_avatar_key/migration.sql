@@ -1,0 +1,1 @@
+ALTER TABLE "MsUser" ADD COLUMN "avatarKey" VARCHAR(300);

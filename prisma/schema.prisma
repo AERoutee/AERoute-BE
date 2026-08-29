@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TravelMode {
+  WALK
+  BICYCLE
+}
+
+enum RoutePreference {
+  balanced
+  lower_exposure
+}
+
+enum DataQuality {
+  modeled_estimate
+  partial_estimate
+}
+
+enum RoadReportCategory {
+  HAZARD
+  BLOCKED_PATH
+  CRASH
+  CONSTRUCTION
+  MAP_ISSUE
+}
+
+model MsUser {
+  id              String              @id
+  name            String
+  email           String              @unique
+  emailVerified   Boolean             @default(false)
+  image           String?
+  avatarKey       String?             @db.VarChar(300)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  sessions        TrSession[]
+  accounts        MsAccount[]
+  comparisons     TrRouteComparison[]
+  roadReports     TrRoadReport[]
+}
+
+model TrSession {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      MsUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MsAccount {
+  id                    String    @id
+  issuer                String
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  MsUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@unique([issuer, accountId], map: "MsAccount_issuer_accountId_uidx")
+}
+
+model TrVerification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model TrRateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+}
+
+model TrRouteComparison {
+  id                 String           @id @default(uuid()) @db.Uuid
+  userId             String?
+  originLabel        String?          @db.VarChar(180)
+  destinationLabel   String?          @db.VarChar(180)
+  mode               TravelMode
+  preference         RoutePreference
+  sensitiveUser      Boolean          @default(false)
+  routeSource        String           @db.VarChar(80)
+  airQualitySource   String           @db.VarChar(120)
+  calculationVersion String           @db.VarChar(32)
+  createdAt          DateTime         @default(now())
+  user               MsUser?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routes             TrRouteResult[]
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model TrRouteResult {
+  id                     String            @id @default(uuid()) @db.Uuid
+  comparisonId           String            @db.Uuid
+  providerRouteId        String            @db.VarChar(80)
+  labels                 String[]
+  durationSeconds        Int
+  distanceMeters         Int
+  estimatedExposureIndex Float
+  averagePm25            Float
+  reductionPercent       Int
+  dataQuality            DataQuality
+  airQualityTimestamp    DateTime
+  encodedPolyline        String
+  comparison             TrRouteComparison @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+
+  @@index([comparisonId])
+}
+
+model TrRoadReport {
+  id          String             @id @default(uuid()) @db.Uuid
+  userId      String?
+  category    RoadReportCategory
+  description String             @db.VarChar(500)
+  latitude    Float
+  longitude   Float
+  expiresAt   DateTime
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  user        MsUser?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  images      TrRoadReportImage[]
+
+  @@index([expiresAt])
+  @@index([latitude, longitude, expiresAt])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model TrRoadReportImage {
+  id       String       @id @default(uuid()) @db.Uuid
+  reportId String       @db.Uuid
+  objectKey String      @db.VarChar(300)
+  imageUrl String       @db.VarChar(1000)
+  position Int
+  width    Int
+  height   Int
+  report   TrRoadReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, position])
+  @@index([reportId])
+}
