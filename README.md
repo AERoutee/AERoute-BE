@@ -86,7 +86,7 @@ AERoute adalah produk informasional. Exposure index bukan personal dose, diagnos
 | --- | --- | --- |
 | **PM2.5 Route Comparison** | Membandingkan alternatif rute berdasarkan waktu, jarak, dan exposure index | Trade-off lebih transparan daripada shortest-route only |
 | **Segment-Level Air Context** | Mewarnai bagian rute berdasarkan sample PM2.5 lokal | Menunjukkan bahwa kondisi tidak selalu sama sepanjang rute |
-| **Weather Along Route** | Menampilkan cuaca pada beberapa titik rute terpilih | Cuaca terlihat langsung di map tanpa mencampur skor PM2.5 |
+| **Weather Along Route** | Menampilkan hourly forecast sesuai estimasi waktu pengguna mencapai titik rute | Prediksi cuaca terlihat langsung di map tanpa mencampur skor PM2.5 |
 | **Community Road Reports** | Pengguna dapat melaporkan hazard, blocked path, crash, construction, atau map issue | Informasi lapangan tampil sebagai marker komunitas selama 24 jam |
 | **Live Location** | Posisi dan heading diperbarui melalui browser geolocation | Mendukung pengalaman navigasi map-first |
 
@@ -95,7 +95,7 @@ AERoute adalah produk informasional. Exposure index bukan personal dose, diagnos
 - **Route Priority** — Balanced dan Lower exposure.
 - **Sensitive-user Mode** — memperluas toleransi waktu Balanced dari 20% menjadi 35%.
 - **Clickable Route Lines** — garis route memiliki touch target besar dan dapat dipilih langsung.
-- **Weather Checkpoints** — cuaca diambil pada 25%, 50%, dan 75% setiap route.
+- **Weather Checkpoints** — hourly forecast diambil pada 25%, 50%, dan 75% route berdasarkan ETA masing-masing titik.
 - **Google OAuth** — login melalui Google atau email/password.
 - **Secure Recovery** — opaque challenge ID dan OTP enam digit.
 - **Profile Photo** — crop, resize, WebP processing, dan private storage.
@@ -556,8 +556,8 @@ Coverage dapat dibuat melalui `npm run test:coverage`. Minimum global threshold 
 Hasil terakhir pada coverage scope:
 
 ```text
-Frontend : 100% statements, 94.11% branches, 100% functions, 100% lines
-Backend  : 88.23% statements, 78.72% branches, 100% functions, 100% lines
+Frontend : 98.23% statements, 85.29% branches, 100% functions, 100% lines
+Backend  : 99.45% statements, 96.85% branches, 98.57% functions, 100% lines
 ```
 
 Angka tersebut hanya mewakili pure logic/components yang masuk `collectCoverageFrom`, bukan keseluruhan Google Maps/provider integration.
