@@ -1,9 +1,5 @@
 jest.mock('sharp', () => ({ __esModule: true, default: jest.fn() }))
-jest.mock('../src/middleware/index.js', () => ({
-  AppError: class AppError extends Error {
-    constructor(public readonly statusCode: number, public readonly code: string, message: string, public readonly retryable = false) { super(message) }
-  },
-}))
+jest.mock('../src/middleware/index.js', () => jest.requireActual('../src/middleware/errors'))
 jest.mock('../src/modules/road-report/providers/index.js', () => ({
   putRoadReportImage: jest.fn(),
   getRoadReportImage: jest.fn(),
@@ -11,6 +7,7 @@ jest.mock('../src/modules/road-report/providers/index.js', () => ({
 }))
 
 import sharp from 'sharp'
+import { AppError, errorHandler } from '../src/middleware/errors'
 import { RoadReportController } from '../src/modules/road-report/road-report.controller'
 import type { RoadReportRepository } from '../src/modules/road-report/road-report.repository'
 import { RoadReportService } from '../src/modules/road-report/road-report.service'
@@ -200,10 +197,24 @@ describe('road report endpoint controllers', () => {
     expect(res.json).toHaveBeenCalledWith({ data: { id: 'report-1' } })
   })
 
-  it('POST rejects invalid input before the service', async () => {
+  it('POST sends validation failures through the central error handler', async () => {
     const service = { create: jest.fn() }
-    await expect(new RoadReportController(service as never).create(request({ body: { ...input, description: 'short' } }), response({ userId: 'user-1' }), next())).rejects.toThrow()
+    let caught: unknown
+    try { await new RoadReportController(service as never).create(request({ body: { ...input, description: 'short' } }), response({ userId: 'user-1' }), next()) } catch (error) { caught = error }
+    const res = response()
+    errorHandler(caught, request({ path: '/api/v1/road-reports' }), res, next())
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.json).toHaveBeenCalledWith({ error: { code: 'validation_error', message: 'Check the submitted details.', retryable: false, fields: { description: expect.any(String) } } })
     expect(service.create).not.toHaveBeenCalled()
+  })
+
+  it('passes representative real AppErrors through the central handler', () => {
+    const failure = new AppError(429, 'report_rate_limited', 'Wait before submitting another road report.', false)
+    const res = response()
+    errorHandler(failure, request({ path: '/api/v1/road-reports' }), res, next())
+    expect(failure).toBeInstanceOf(AppError)
+    expect(res.status).toHaveBeenCalledWith(429)
+    expect(res.json).toHaveBeenCalledWith({ error: { code: 'report_rate_limited', message: failure.message, retryable: false } })
   })
 
   it.each([

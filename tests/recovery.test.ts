@@ -1,14 +1,10 @@
 jest.mock('../src/config/auth', () => ({
   auth: { api: { requestPasswordResetEmailOTP: jest.fn(), checkVerificationOTP: jest.fn(), resetPasswordEmailOTP: jest.fn() } },
 }))
-jest.mock('../src/middleware/index.js', () => ({
-  AppError: class AppError extends Error {
-    constructor(public readonly statusCode: number, public readonly code: string, message: string, public readonly retryable = false) { super(message) }
-  },
-}))
+jest.mock('../src/middleware/index.js', () => jest.requireActual('../src/middleware/errors'))
 
 import { auth } from '../src/config/auth'
-import { AppError } from '../src/middleware/errors'
+import { AppError, errorHandler } from '../src/middleware/errors'
 import { RecoveryController } from '../src/modules/recovery/recovery.controller'
 import type { RecoveryRepository } from '../src/modules/recovery/recovery.repository'
 import { RecoveryService } from '../src/modules/recovery/recovery.service'
@@ -181,9 +177,15 @@ describe('five recovery endpoint controllers', () => {
     expect(res.json).toHaveBeenCalledWith({ data: result })
   })
 
-  it('lets service failures reach async endpoint handling', async () => {
-    const failure = new AppError(400, 'email_invalid', 'bad')
+  it('passes a real AppError through the central error handler', async () => {
+    const failure = new AppError(400, 'email_invalid', 'Enter a valid email address.')
     const controller = new RecoveryController({ request: jest.fn().mockRejectedValue(failure) } as never)
-    await expect(controller.request(request(), response(), next())).rejects.toBe(failure)
+    let caught: unknown
+    try { await controller.request(request(), response(), next()) } catch (error) { caught = error }
+    expect(caught).toBeInstanceOf(AppError)
+    const res = response()
+    errorHandler(caught, request({ path: '/api/v1/recovery-challenges' }), res, next())
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.json).toHaveBeenCalledWith({ error: { code: 'email_invalid', message: 'Enter a valid email address.', retryable: false } })
   })
 })
