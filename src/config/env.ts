@@ -2,11 +2,13 @@ import { z } from 'zod'
 
 const optionalString = z.preprocess((value) => value === '' ? undefined : value, z.string().min(1).optional())
 const optionalUrl = z.preprocess((value) => value === '' ? undefined : value, z.url().optional())
+const originList = z.string().default('http://localhost:5173').transform((value) => value.split(',').map((origin) => origin.trim().replace(/\/$/u, '')).filter(Boolean)).pipe(z.array(z.url()).min(1))
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   FRONTEND_ORIGIN: z.url().default('http://localhost:5173'),
+  CORS_ORIGINS: originList,
   BETTER_AUTH_URL: z.url().default('http://localhost:3000'),
   BETTER_AUTH_SECRET: z.string().min(32).default('development-only-secret-change-me'),
   DATABASE_URL: z.string().url().refine((value) => /^postgres(ql)?:\/\//u.test(value), 'DATABASE_URL must use PostgreSQL').default('postgresql://postgres:postgres@localhost:5432/aeroute'),
@@ -39,7 +41,8 @@ export function parseEnvironment(input: NodeJS.ProcessEnv | Record<string, strin
   if (environment.NODE_ENV === 'production') {
     if (!s3Configuration.every(Boolean)) throw new Error('S3_ENDPOINT, S3_REGION, S3_BUCKET, S3_PUBLIC_BASE_URL, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY are required in production')
     if (environment.BETTER_AUTH_SECRET === 'development-only-secret-change-me') throw new Error('BETTER_AUTH_SECRET must be replaced in production')
-    if (!environment.FRONTEND_ORIGIN.startsWith('https://') || !environment.BETTER_AUTH_URL.startsWith('https://')) throw new Error('Production origins must use HTTPS')
+    if (!environment.FRONTEND_ORIGIN.startsWith('https://') || !environment.BETTER_AUTH_URL.startsWith('https://') || environment.CORS_ORIGINS.some((origin) => !origin.startsWith('https://'))) throw new Error('Production origins must use HTTPS')
+    if (!environment.CORS_ORIGINS.includes(environment.FRONTEND_ORIGIN.replace(/\/$/u, ''))) throw new Error('CORS_ORIGINS must include FRONTEND_ORIGIN')
     if (environment.DATABASE_URL === 'postgresql://postgres:postgres@localhost:5432/aeroute') throw new Error('DATABASE_URL must be configured for production')
     if (!environment.GOOGLE_MAPS_SERVER_KEY) throw new Error('GOOGLE_MAPS_SERVER_KEY is required in production')
     if (!environment.GOOGLE_CLIENT_ID) throw new Error('GOOGLE_CLIENT_ID is required in production')

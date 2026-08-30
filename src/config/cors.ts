@@ -1,10 +1,18 @@
 import type { CorsOptions } from 'cors'
 import { env } from './env.js'
 
+export const allowedOrigins = [...new Set([env.FRONTEND_ORIGIN.replace(/\/$/u, ''), ...env.CORS_ORIGINS])]
+
 export const corsOptions: CorsOptions = {
-  origin: env.FRONTEND_ORIGIN,
+  origin(origin, callback) {
+    if (!origin) { callback(null, true); return }
+    callback(null, allowedOrigins.includes(origin.replace(/\/$/u, '')))
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['X-AERoute-Layer-Available'],
+  exposedHeaders: ['Content-Length', 'ETag'],
+  maxAge: 86_400,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
 }

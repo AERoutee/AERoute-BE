@@ -1,6 +1,7 @@
 import { prismaAdapter } from '@better-auth/prisma-adapter'
 import { betterAuth } from 'better-auth'
 import { emailOTP } from 'better-auth/plugins'
+import { allowedOrigins } from './cors.js'
 import { prisma } from './db.js'
 import { env } from './env.js'
 import { sendEmail } from './mail.js'
@@ -14,7 +15,7 @@ export const auth = betterAuth({
   session: { modelName: 'trSession', expiresIn: 7 * 24 * 60 * 60, updateAge: 24 * 60 * 60 },
   account: { modelName: 'msAccount', encryptOAuthTokens: true },
   verification: { modelName: 'trVerification', storeIdentifier: 'hashed' },
-  trustedOrigins: [env.FRONTEND_ORIGIN],
+  trustedOrigins: allowedOrigins,
   advanced: { useSecureCookies: env.NODE_ENV === 'production', trustedProxyHeaders: env.TRUST_PROXY },
   rateLimit: {
     enabled: env.NODE_ENV !== 'test',
