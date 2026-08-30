@@ -160,11 +160,12 @@ Documentation: OpenAPI 3.1 + Swagger UI
 #### DevOps & Tools
 
 ```text
+Deployment   : Railway
 Target Web   : aeroute.my.id
 Target API   : api.aeroute.my.id
-CI/CD        : Belum dikonfigurasi
-Testing      : Lint, TypeScript, build, Prisma validation, manual integration QA
-Monitoring   : Request logger dengan redaksi data sensitif
+CI/CD        : Railway GitHub Integration (auto-deploy dari branch terhubung)
+Testing      : Jest, React Testing Library, lint, TypeScript, build, Prisma validation
+Monitoring   : LogRocket untuk frontend; Railway logs dan redacting request logger untuk backend
 ```
 
 ### Alasan Pemilihan Teknologi
@@ -183,12 +184,13 @@ Monitoring   : Request logger dengan redaksi data sensitif
 ```json
 {
   "frontend": {
-    "react": "^19.2.4",
-    "react-router": "^7.13.2",
-    "@tanstack/react-query": "^5.95.2",
-    "axios": "^1.13.6",
+    "react": "^19.2.8",
+    "react-router": "^8.3.0",
+    "@tanstack/react-query": "^5.102.2",
+    "axios": "^1.19.0",
     "better-auth": "^1.7.1",
-    "motion": "^12.38.0"
+    "motion": "^13.1.1",
+    "logrocket": "^12.3.0"
   },
   "backend": {
     "express": "^5.2.1",
@@ -336,6 +338,8 @@ Frontend:
 ```env
 VITE_API_BASE_URL="http://localhost:3000"
 VITE_GOOGLE_MAPS_BROWSER_KEY="replace-with-browser-restricted-key"
+VITE_LOGROCKET_APP_ID="your-workspace/your-app"
+VITE_APP_VERSION="0.1.0"
 ```
 
 Backend groups:
@@ -350,6 +354,20 @@ Storage     : S3_ENDPOINT, S3_REGION, S3_BUCKET, S3_PUBLIC_BASE_URL, S3_ACCESS_K
 ```
 
 Jangan commit `.env`. Server secrets tidak boleh memakai prefix `VITE_`.
+
+### Railway Deployment & CI/CD
+
+Kedua repository memiliki `railway.json`:
+
+- Railway Railpack menjalankan `npm ci --include=dev` dan production build.
+- Backend menjalankan `npm run db:migrate` sebagai pre-deploy command.
+- Backend health check memakai `/api/health`; frontend memakai `/`.
+- Railway GitHub Integration menjadi CI/CD deployment: push ke branch terhubung memicu build, health check, dan deploy otomatis.
+- Variable production dikonfigurasi melalui Railway Variables, bukan file `.env` di repository.
+
+### Monitoring
+
+LogRocket hanya diinisialisasi pada production ketika `VITE_LOGROCKET_APP_ID` tersedia. Konfigurasi AERoute menonaktifkan IP capture serta menyensor text, inputs, images, query strings, request/response body, dan headers. Backend dipantau melalui Railway logs dan request logger yang meredaksi credential, OTP, cookie, token, dan file buffer.
 
 ---
 
@@ -493,7 +511,16 @@ Dokumentasi request body, response schema, multipart upload, cookie security, co
 
 ## 🧪 Testing
 
-Automated test suite belum tersedia.
+Jest digunakan untuk pure business logic dan behavior-focused component tests. Test provider eksternal tetap dilakukan melalui integration/manual QA agar tidak menghasilkan test palsu.
+
+### Running Tests
+
+```bash
+# Frontend atau backend
+npm test
+npm run test:watch
+npm run test:coverage
+```
 
 ### Quality Checks
 
@@ -524,7 +551,16 @@ npx prisma validate
 
 ### Coverage
 
-Coverage report belum tersedia karena automated test suite belum ditambahkan.
+Coverage dapat dibuat melalui `npm run test:coverage`. Minimum global threshold yang dikonfigurasi: 80% lines/functions/statements dan 70% branches untuk file yang masuk coverage scope.
+
+Hasil terakhir pada coverage scope:
+
+```text
+Frontend : 100% statements, 94.11% branches, 100% functions, 100% lines
+Backend  : 88.23% statements, 78.72% branches, 100% functions, 100% lines
+```
+
+Angka tersebut hanya mewakili pure logic/components yang masuk `collectCoverageFrom`, bukan keseluruhan Google Maps/provider integration.
 
 ---
 
