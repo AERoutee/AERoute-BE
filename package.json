@@ -47,5 +47,6 @@
     "prisma": "^7.9.1",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2"
-  }
+  },
+  "license": "MIT"
 }

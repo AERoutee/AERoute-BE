@@ -5,6 +5,7 @@
   ### Secure routing, environmental context, and community reports.
 
   [![GitHub](https://img.shields.io/badge/GitHub-AERoute--BE-181717?style=for-the-badge&logo=github)](https://github.com/AERoutee/AERoute-BE)
+  [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
   **Submission for ITECHNO CUP 2026 - Web Development**
 
@@ -310,7 +311,7 @@ Integration QA tambahan:
 
 ## 📄 Lisensi
 
-Lisensi proyek belum ditetapkan. Tidak ada klaim lisensi MIT sampai file `LICENSE` resmi ditambahkan.
+Proyek ini dilisensikan di bawah [MIT License](LICENSE).
 
 ---
 
