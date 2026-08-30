@@ -76,7 +76,8 @@ describe('profile avatar service', () => {
     validSharp()
     putMock.mockResolvedValue({ url: 'https://cdn/new.webp', isPublic: false })
     const result = await new ProfileService(repo).uploadAvatar('user id', file())
-    expect(result.image).toMatch(/^https:\/\/api\.example\.com\/api\/v1\/profile\/avatar\/user%20id\?v=.+/u)
+    expect(repo.updateAvatar).toHaveBeenCalledWith('user id', expect.stringMatching(/^avatars\/user id\/.+\.webp$/u), expect.stringMatching(/^\/api\/v1\/profile\/avatar\/user%20id\?v=.+/u))
+    expect(result.image).toMatch(/^\/api\/v1\/profile\/avatar\/user%20id\?v=.+/u)
     expect(deleteMock).not.toHaveBeenCalled()
   })
 

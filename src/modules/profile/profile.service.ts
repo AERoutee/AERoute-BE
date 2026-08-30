@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
-import { env } from '../../config/index.js'
 import { AppError } from '../../middleware/index.js'
 import { deleteAvatar, getAvatar, putAvatar } from './providers/avatar-storage.provider.js'
 import type { ProfileRepository } from './profile.repository.js'
@@ -17,7 +16,7 @@ export class ProfileService {
     const key = `avatars/${userId}/${version}.webp`
     const current = await this.repository.findAvatar(userId)
     const stored = await putAvatar(key, body)
-    const image = stored.isPublic ? stored.url : `${env.BETTER_AUTH_URL}/api/v1/profile/avatar/${encodeURIComponent(userId)}?v=${version}`
+    const image = stored.isPublic ? stored.url : `/api/v1/profile/avatar/${encodeURIComponent(userId)}?v=${version}`
     try {
       await this.repository.updateAvatar(userId, key, image)
     } catch {
