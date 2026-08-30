@@ -7,14 +7,17 @@
     "dev": "tsx watch --env-file=.env --exclude \"src/generated/**/*\" --exclude \"dist/**/*\" src/index.ts",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && npm run db:generate && tsc",
-    "start": "node --env-file=.env dist/index.js",
+    "start": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "postinstall": "npm run db:generate",
     "lint": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage --runInBand"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1117.0",
@@ -37,13 +40,17 @@
     "deepmerge-ts": "8.0.2"
   },
   "devDependencies": {
+    "@swc/core": "^1.16.1",
+    "@swc/jest": "^0.2.39",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jest": "^29.5.14",
     "@types/multer": "^2.2.0",
     "@types/node": "^26.2.0",
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.23.1",
     "@types/swagger-ui-express": "^4.1.8",
+    "jest": "^29.7.0",
     "prisma": "^7.9.1",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2"
