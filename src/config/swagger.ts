@@ -87,10 +87,11 @@ export const openApiDocument: Record<string, unknown> = {
       },
       WeatherAvailable: {
         type: 'object',
-        required: ['status', 'observedAt', 'conditionType', 'condition', 'temperatureC', 'precipitationProbabilityPercent', 'windSpeedKph'],
+        required: ['status', 'observedAt', 'forecastOffsetMinutes', 'conditionType', 'condition', 'temperatureC', 'precipitationProbabilityPercent', 'windSpeedKph'],
         properties: {
           status: { type: 'string', const: 'available' },
           observedAt: { type: 'string', format: 'date-time' },
+          forecastOffsetMinutes: { type: 'integer', minimum: 0, maximum: 1380 },
           conditionType: { type: 'string', example: 'PARTLY_CLOUDY' },
           condition: { type: 'string', example: 'Partly cloudy' },
           isDaytime: { type: 'boolean' },

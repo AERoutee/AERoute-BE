@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { getRouteAirQuality } from './providers/google-air-quality.provider.js'
 import { getRoutes } from './providers/google-routes.provider.js'
-import { getCurrentWeather } from './providers/google-weather.provider.js'
+import { getForecastWeather } from './providers/google-weather.provider.js'
 import { rankRoutes } from './exposure.service.js'
 import { evaluateWeatherAdvisory, type WeatherConditions } from './weather-advisory.service.js'
 import type { RouteComparisonRepository } from './route-comparison.repository.js'
@@ -36,14 +36,15 @@ export class RouteComparisonService {
   async compare(input: RouteComparisonRequest, userId: string | null) {
     const providerRoutes = await getRoutes(input)
     const midpoint = { latitude: (input.origin.latitude + input.destination.latitude) / 2, longitude: (input.origin.longitude + input.destination.longitude) / 2 }
+    const weatherProgress = [.25, .5, .75] as const
     const weatherLocationsByRoute = providerRoutes.map((route) => routeWeatherLocations(route.encodedPolyline, [input.origin, midpoint, input.destination]))
     const [candidates, sampledWeatherByRoute] = await Promise.all([
       Promise.all(providerRoutes.map(async (route) => {
         const airQuality = await getRouteAirQuality(route.encodedPolyline)
         return { ...route, averagePm25: airQuality.averagePm25, airQualityTimestamp: airQuality.timestamp, dataQuality: airQuality.dataQuality, airQualitySamples: airQuality.samples }
       })),
-      Promise.all(weatherLocationsByRoute.map((locations) => Promise.all(
-        locations.map((point) => getCurrentWeather(point).catch((): WeatherConditions => ({ status: 'unavailable' }))),
+      Promise.all(weatherLocationsByRoute.map((locations, routeIndex) => Promise.all(
+        locations.map((point, pointIndex) => getForecastWeather(point, providerRoutes[routeIndex].durationSeconds * weatherProgress[pointIndex]).catch((): WeatherConditions => ({ status: 'unavailable' }))),
       ))),
     ])
     const weather = sampledWeatherByRoute[0][1]
