@@ -3,6 +3,7 @@ import { evaluateWeatherAdvisory, type WeatherConditions } from '../src/modules/
 const baseWeather: Extract<WeatherConditions, { status: 'available' }> = {
   status: 'available',
   observedAt: new Date(0).toISOString(),
+  forecastOffsetMinutes: 30,
   conditionType: 'CLEAR',
   condition: 'Clear',
   isDaytime: true,
@@ -43,5 +44,29 @@ describe('evaluateWeatherAdvisory', () => {
     const weather = { ...baseWeather, windGustKph: 55 }
     expect(evaluateWeatherAdvisory(weather, 'WALK').level).toBe('CAUTION')
     expect(evaluateWeatherAdvisory(weather, 'BICYCLE').level).toBe('DELAY')
+  })
+
+  it.each([
+    [{ visibilityKm: 0.9 }, 'DELAY', 'VERY_LOW_VISIBILITY'],
+    [{ visibilityKm: 4.9 }, 'CAUTION', 'LOW_VISIBILITY'],
+    [{ heatIndexC: 40 }, 'DELAY', 'EXTREME_HEAT'],
+    [{ feelsLikeC: 35 }, 'CAUTION', 'HIGH_HEAT'],
+    [{ windSpeedKph: 30 }, 'CAUTION', 'STRONG_WIND'],
+    [{ uvIndex: 8 }, 'CAUTION', 'HIGH_UV'],
+    [{ conditionType: 'THUNDERSTORM', thunderstormProbabilityPercent: 0 }, 'DELAY', 'THUNDERSTORM_RISK'],
+  ] as const)('classifies threshold conditions %p', (changes, level, code) => {
+    const result = evaluateWeatherAdvisory({ ...baseWeather, ...changes }, 'WALK')
+    expect(result.level).toBe(level)
+    expect(result.reasons).toContainEqual(expect.objectContaining({ code }))
+  })
+
+  it('does not apply UV caution at night', () => {
+    expect(evaluateWeatherAdvisory({ ...baseWeather, isDaytime: false, uvIndex: 11 }, 'WALK')).toMatchObject({ level: 'NORMAL', reasons: [] })
+  })
+
+  it('returns only delay reasons when delay and caution conditions coexist', () => {
+    const result = evaluateWeatherAdvisory({ ...baseWeather, thunderstormProbabilityPercent: 50, precipitationProbabilityPercent: 50 }, 'WALK')
+    expect(result.level).toBe('DELAY')
+    expect(result.reasons.map((reason) => reason.code)).toEqual(['THUNDERSTORM_RISK'])
   })
 })

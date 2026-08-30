@@ -32,4 +32,21 @@ describe('rankRoutes', () => {
   it('returns an empty list for no candidates', () => {
     expect(rankRoutes([], { preference: 'balanced', sensitiveUser: false })).toEqual([])
   })
+
+  it('includes a route exactly on the balanced duration boundary', () => {
+    const result = rankRoutes([route('fast', 10, 20), route('boundary', 12, 5), route('outside', 12.1, 1)], { preference: 'balanced', sensitiveUser: false })
+    expect(result.find((item) => item.labels.includes('RECOMMENDED'))?.id).toBe('boundary')
+  })
+
+  it('keeps first routes on duration and exposure ties and sorts by duration', () => {
+    const result = rankRoutes([route('later', 12, 10), route('first', 10, 12), route('tie', 10, 12)], { preference: 'lower-exposure', sensitiveUser: false })
+    expect(result.map((item) => item.id)).toEqual(['first', 'tie', 'later'])
+    expect(result.find((item) => item.labels.includes('FASTEST'))?.id).toBe('first')
+    expect(result.find((item) => item.labels.includes('LOWEST_EXPOSURE'))?.id).toBe('later')
+  })
+
+  it('returns zero reduction when the fastest exposure is zero', () => {
+    const result = rankRoutes([route('zero', 10, 0), route('other', 11, 10)], { preference: 'balanced', sensitiveUser: false })
+    expect(result.every((item) => item.reductionFromFastestPercent === 0)).toBe(true)
+  })
 })
