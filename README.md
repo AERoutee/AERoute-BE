@@ -438,192 +438,56 @@ http://localhost:3000/api/openapi.json
 
 ### Health
 
-| Method & Endpoint | Auth | Request | Success Response |
-| --- | --- | --- | --- |
-| `GET /api/health` | Public | Tanpa body atau parameter | `200 { data: { status: "ok", service: "aeroute-api" } }` |
+```http
+GET /api/health
+```
 
 ### Authentication
 
-Better Auth menggunakan session cookie HTTP-only. Frontend mengirim cookie melalui `credentials: "include"`; browser tidak membaca atau membuat token sendiri.
-
-| Method & Endpoint | Auth | Request | Success Response |
-| --- | --- | --- | --- |
-| `POST /api/auth/sign-up/email` | Public | JSON `{ name, email, password }`; password 8–128 karakter | `200` user/session payload dan session cookie |
-| `POST /api/auth/sign-in/email` | Public | JSON `{ email, password }` | `200` user/session payload dan session cookie |
-| `POST /api/auth/sign-in/social` | Public | JSON `{ provider: "google", callbackURL, errorCallbackURL? }` | `200` OAuth redirect information |
-| `GET /api/auth/get-session` | Session cookie optional | Tanpa body | `200` current session atau `null` |
-| `POST /api/auth/sign-out` | Session cookie | Tanpa body | `200` session dicabut dan cookie dibersihkan |
-| `POST /api/auth/update-user` | Session cookie | JSON `{ name?, image? }` | `200` user terbaru |
-| `POST /api/auth/change-password` | Session cookie | JSON `{ currentPassword, newPassword, revokeOtherSessions }` | `200` password berubah; session lain dapat dicabut |
-| `GET /api/auth/list-accounts` | Session cookie | Tanpa body | `200` daftar credential/social accounts terhubung |
-
-Contoh sign-in:
-
-```javascript
-const response = await fetch('http://localhost:3000/api/auth/sign-in/email', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  credentials: 'include',
-  body: JSON.stringify({
-    email: 'user@example.com',
-    password: 'secure-password'
-  })
-});
-
-const result = await response.json();
+```http
+POST /api/auth/sign-up/email
+POST /api/auth/sign-in/email
+POST /api/auth/sign-in/social
+GET  /api/auth/get-session
+POST /api/auth/sign-out
+POST /api/auth/update-user
+POST /api/auth/change-password
+GET  /api/auth/list-accounts
 ```
 
 ### Password Recovery
 
-| Method & Endpoint | Auth | Request | Success Response |
-| --- | --- | --- | --- |
-| `POST /api/v1/recovery-challenges` | Public | JSON `{ email }` | `200 { data: { id, expiresInSeconds: 300 } }`; OTP dikirim melalui email |
-| `GET /api/v1/recovery-challenges/:id` | Public | Path `id` opaque 43 karakter | `200 { data: { maskedEmail, expiresAt } }` |
-| `POST /api/v1/recovery-challenges/:id/resend` | Public | Path `id`; tanpa body | `200 { data: { id: newId, expiresInSeconds: 300 } }`; challenge lama dihapus |
-| `POST /api/v1/recovery-challenges/:id/verify` | Public | JSON `{ otp }`; OTP enam digit | `200 { data: { verified: true } }` |
-| `POST /api/v1/recovery-challenges/:id/reset` | Public | JSON `{ otp, password }` | `200 { data: { success: true } }`; OTP dikonsumsi dan session lama dicabut |
-
-OTP tidak pernah dikirim melalui query string. Database menyimpan hash OTP dan SHA-256 digest challenge ID.
+```http
+POST /api/v1/recovery-challenges
+GET  /api/v1/recovery-challenges/:id
+POST /api/v1/recovery-challenges/:id/resend
+POST /api/v1/recovery-challenges/:id/verify
+POST /api/v1/recovery-challenges/:id/reset
+```
 
 ### Profile Image
 
-| Method & Endpoint | Auth | Request | Success Response |
-| --- | --- | --- | --- |
-| `GET /api/v1/profile/avatar/:userId` | Public | Path `userId` | `200 image/webp`; `404` jika avatar tidak ada |
-| `PUT /api/v1/profile/avatar` | Session cookie | Multipart field `avatar`; JPG/PNG/WebP, maksimal 5 MB, minimal 64×64 | `200 { data: { image } }` |
-| `DELETE /api/v1/profile/avatar` | Session cookie | Tanpa body | `200 { data: { image: null } }` |
-
-Contoh upload avatar:
-
-```javascript
-const body = new FormData();
-body.append('avatar', file);
-
-const response = await fetch('http://localhost:3000/api/v1/profile/avatar', {
-  method: 'PUT',
-  credentials: 'include',
-  body
-});
+```http
+GET    /api/v1/profile/avatar/:userId
+PUT    /api/v1/profile/avatar
+DELETE /api/v1/profile/avatar
 ```
 
 ### Route Comparison
 
-| Method & Endpoint | Auth | Request | Success Response |
-| --- | --- | --- | --- |
-| `POST /api/v1/route-comparisons` | Optional session cookie | JSON `{ origin, destination, mode, preference, sensitiveUser }` | `200 { data: RouteComparison, stats: { routeCount } }` |
-
-Request:
-
-```json
-{
-  "origin": { "latitude": -6.2088, "longitude": 106.8456 },
-  "destination": { "latitude": -6.2146, "longitude": 106.8451 },
-  "mode": "WALK",
-  "preference": "balanced",
-  "sensitiveUser": false
-}
+```http
+POST /api/v1/route-comparisons
 ```
-
-Response ringkas:
-
-```json
-{
-  "data": {
-    "routes": [
-      {
-        "id": "provider-route-id",
-        "labels": ["FASTEST", "RECOMMENDED"],
-        "durationSeconds": 900,
-        "distanceMeters": 1200,
-        "estimatedExposureIndex": 180,
-        "averagePm25": 12,
-        "encodedPolyline": "...",
-        "airQualitySamples": [
-          { "latitude": -6.2088, "longitude": 106.8456, "pm25": 12 }
-        ]
-      }
-    ],
-    "weatherPoints": [],
-    "weatherPointsByRoute": {},
-    "weatherAdvisory": { "level": "NORMAL", "reasons": [] }
-  },
-  "stats": { "routeCount": 1 }
-}
-```
-
-Kemungkinan error utama: `400` validation, `422` cycling route unavailable, `429` provider/user limit, `502/503` provider unavailable.
 
 ### Community Road Reports
 
-| Method & Endpoint | Auth | Request | Success Response |
-| --- | --- | --- | --- |
-| `GET /api/v1/road-reports` | Public | Query `north`, `south`, `east`, `west`; area maksimal 2°×2° | `200 { data: RoadReport[] }`; maksimal 100 report aktif |
-| `POST /api/v1/road-reports` | Session cookie | Multipart `category`, `description`, `latitude`, `longitude`, optional `images[]` | `201 { data: RoadReport }` |
-| `GET /api/v1/road-report-images/:id` | Public | Path image UUID | `200 image/webp`; `404` jika image tidak ada |
-
-Report multipart contract:
-
-```text
-category    : HAZARD | BLOCKED_PATH | CRASH | CONSTRUCTION | MAP_ISSUE
-description : 10–500 karakter
-latitude    : -90 sampai 90
-longitude   : -180 sampai 180
-images      : opsional, maksimal 3 file JPG/PNG/WebP, maksimal 3 MB per file
+```http
+GET  /api/v1/road-reports
+POST /api/v1/road-reports
+GET  /api/v1/road-report-images/:id
 ```
 
-Contoh request report:
-
-```javascript
-const body = new FormData();
-body.append('category', 'HAZARD');
-body.append('description', 'Lubang besar di sisi kiri jalur sepeda.');
-body.append('latitude', '-6.2088');
-body.append('longitude', '106.8456');
-body.append('images', file);
-
-const response = await fetch('http://localhost:3000/api/v1/road-reports', {
-  method: 'POST',
-  credentials: 'include',
-  body
-});
-```
-
-Response:
-
-```json
-{
-  "data": {
-    "id": "report-uuid",
-    "category": "HAZARD",
-    "description": "Lubang besar di sisi kiri jalur sepeda.",
-    "latitude": -6.2088,
-    "longitude": 106.8456,
-    "createdAt": "2026-08-29T00:00:00.000Z",
-    "expiresAt": "2026-08-30T00:00:00.000Z",
-    "images": ["/api/v1/road-report-images/image-uuid"],
-    "reporter": "Yanz"
-  }
-}
-```
-
-### Error Response
-
-Semua custom API error memakai envelope berikut:
-
-```json
-{
-  "error": {
-    "code": "validation_error",
-    "message": "Check the submitted details.",
-    "retryable": false,
-    "fields": {
-      "description": "Too small: expected string to have >=10 characters"
-    }
-  }
-}
-```
-
-Dokumentasi request body, response schemas, multipart upload, cookie security, examples, dan seluruh status code tersedia di Swagger UI.
+Dokumentasi request body, response schema, multipart upload, cookie security, contoh, dan status code tersedia lengkap di Swagger UI.
 
 ---
 
