@@ -209,52 +209,13 @@ Monitoring   : LogRocket untuk frontend; Railway logs dan redacting request logg
 
 ### System Architecture
 
-```mermaid
-flowchart TD
-    U[Browser User] --> FE[AERoute Frontend]
-    FE --> GM[Google Maps JavaScript API]
-    FE -->|HTTPS + Session Cookie| BE[AERoute Backend]
-    BE --> AUTH[Better Auth]
-    BE --> ROUTES[Google Routes API]
-    BE --> AQ[Google Air Quality API]
-    BE --> WEATHER[Google Weather API]
-    BE --> SMTP[SMTP Provider]
-    BE --> S3[Private S3-Compatible Storage]
-    AUTH --> DB[(PostgreSQL)]
-    BE --> DB
-```
+![AERoute System Architecture](assets/Architecture.png)
 
 Frontend mengelola interaksi dan visualisasi. Backend menjadi sumber kebenaran untuk validation, ownership, provider orchestration, route ranking, PM2.5 sampling, recovery, report persistence, dan image processing.
 
 ### Database Schema
 
-```mermaid
-erDiagram
-    MsUser ||--o{ MsAccount : owns
-    MsUser ||--o{ TrSession : has
-    MsUser ||--o{ TrRouteComparison : creates
-    TrRouteComparison ||--o{ TrRouteResult : contains
-    MsUser ||--o{ TrRoadReport : submits
-    TrRoadReport ||--o{ TrRoadReportImage : contains
-
-    MsUser {
-      string id PK
-      string email UK
-      string name
-    }
-    TrRouteComparison {
-      uuid id PK
-      string mode
-      string preference
-    }
-    TrRoadReport {
-      uuid id PK
-      string category
-      float latitude
-      float longitude
-      datetime expiresAt
-    }
-```
+![AERoute Entity Relationship Diagram](assets/ERD.png)
 
 ### Folder Structure
 
