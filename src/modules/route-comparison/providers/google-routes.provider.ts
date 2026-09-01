@@ -43,7 +43,7 @@ export async function getRoutes(input: RouteComparisonRequest): Promise<Provider
 
   const payload = await response.json().catch(() => null)
   if (!response.ok) throw new AppError(response.status === 429 ? 503 : 502, 'route_provider_error', 'The route provider could not complete this request.', response.status >= 500 || response.status === 429)
-  if (input.mode === 'BICYCLE' && typeof payload === 'object' && payload !== null && 'routes' in payload && Array.isArray(payload.routes) && payload.routes.length === 0) throw new AppError(422, 'cycling_route_unavailable', 'Google Maps does not provide a cycling route for this trip. Try walking mode.', false)
+  if (input.mode === 'BICYCLE' && typeof payload === 'object' && payload !== null && (!('routes' in payload) || Array.isArray(payload.routes) && payload.routes.length === 0)) throw new AppError(422, 'cycling_route_unavailable', 'Google Maps does not provide a cycling route for this trip. Try walking mode.', false)
   const parsed = responseSchema.safeParse(payload)
   if (!parsed.success) throw new AppError(502, 'invalid_route_response', 'The route provider returned an invalid response.', true)
   return parsed.data.routes.map((route, index) => ({ id: `route_${index + 1}`, durationSeconds: Number.parseFloat(route.duration), distanceMeters: route.distanceMeters, encodedPolyline: route.polyline.encodedPolyline }))

@@ -96,6 +96,7 @@ describe('Google Routes provider', () => {
   it.each([
     [{ routes: [] }, 'WALK', 502, 'invalid_route_response', true],
     [{ routes: [{ distanceMeters: -1, duration: 'bad', polyline: { encodedPolyline: '' } }] }, 'WALK', 502, 'invalid_route_response', true],
+    [{}, 'BICYCLE', 422, 'cycling_route_unavailable', false],
     [{ routes: [] }, 'BICYCLE', 422, 'cycling_route_unavailable', false],
     [{ routes: [{ distanceMeters: -1, duration: 'bad', polyline: { encodedPolyline: '' } }] }, 'BICYCLE', 502, 'invalid_route_response', true],
   ] as const)('rejects invalid successful payloads for %s', async (payload, mode, statusCode, code, retryable) => {
