@@ -79,9 +79,9 @@ describe('Google Routes provider', () => {
     await expectAppError(getRoutes(input), 503, 'route_provider_unavailable', true)
   })
 
-  it('maps cycling 4xx responses to a non-retryable route-domain error', async () => {
-    fetchMock.mockResolvedValue(providerResponse({ error: { message: 'no route' } }, 400))
-    await expectAppError(getRoutes({ ...input, mode: 'BICYCLE' }), 422, 'cycling_route_unavailable', false)
+  it.each([400, 403])('does not disguise cycling HTTP %s failures as missing coverage', async (providerStatus) => {
+    fetchMock.mockResolvedValue(providerResponse({ error: { message: 'provider failure' } }, providerStatus))
+    await expectAppError(getRoutes({ ...input, mode: 'BICYCLE' }), 502, 'route_provider_error', false)
   })
 
   it.each([
@@ -97,6 +97,7 @@ describe('Google Routes provider', () => {
     [{ routes: [] }, 'WALK', 502, 'invalid_route_response', true],
     [{ routes: [{ distanceMeters: -1, duration: 'bad', polyline: { encodedPolyline: '' } }] }, 'WALK', 502, 'invalid_route_response', true],
     [{ routes: [] }, 'BICYCLE', 422, 'cycling_route_unavailable', false],
+    [{ routes: [{ distanceMeters: -1, duration: 'bad', polyline: { encodedPolyline: '' } }] }, 'BICYCLE', 502, 'invalid_route_response', true],
   ] as const)('rejects invalid successful payloads for %s', async (payload, mode, statusCode, code, retryable) => {
     fetchMock.mockResolvedValue(providerResponse(payload))
     await expectAppError(getRoutes({ ...input, mode }), statusCode, code, retryable)
