@@ -45,6 +45,14 @@ describe('rankRoutes', () => {
     expect(result.find((item) => item.labels.includes('LOWEST_EXPOSURE'))?.id).toBe('later')
   })
 
+  it('keeps overlapping labels on a route that is fastest, recommended, and lowest exposure', () => {
+    const result = rankRoutes([route('short-clean', 185, 13.3), route('long-dirty', 227, 50.1)], { preference: 'balanced', sensitiveUser: false })
+    expect(result.map(({ id, labels }) => ({ id, labels }))).toEqual([
+      { id: 'short-clean', labels: ['FASTEST', 'RECOMMENDED', 'LOWEST_EXPOSURE'] },
+      { id: 'long-dirty', labels: [] },
+    ])
+  })
+
   it('returns zero reduction when the fastest exposure is zero', () => {
     const result = rankRoutes([route('zero', 10, 0), route('other', 11, 10)], { preference: 'balanced', sensitiveUser: false })
     expect(result.every((item) => item.reductionFromFastestPercent === 0)).toBe(true)
