@@ -1,4 +1,4 @@
-import { evaluateWeatherAdvisory, type WeatherConditions } from '../src/modules/route-comparison/weather-advisory.service'
+import { evaluateWeatherAdvisory, summarizeHeatUv, type WeatherConditions } from '../src/modules/route-comparison/weather-advisory.service'
 
 const baseWeather: Extract<WeatherConditions, { status: 'available' }> = {
   status: 'available',
@@ -64,9 +64,31 @@ describe('evaluateWeatherAdvisory', () => {
     expect(evaluateWeatherAdvisory({ ...baseWeather, isDaytime: false, uvIndex: 11 }, 'WALK')).toMatchObject({ level: 'NORMAL', reasons: [] })
   })
 
-  it('returns only delay reasons when delay and caution conditions coexist', () => {
+  it('keeps all reasons when delay and caution conditions coexist', () => {
     const result = evaluateWeatherAdvisory({ ...baseWeather, thunderstormProbabilityPercent: 50, precipitationProbabilityPercent: 50 }, 'WALK')
     expect(result.level).toBe('DELAY')
-    expect(result.reasons.map((reason) => reason.code)).toEqual(['THUNDERSTORM_RISK'])
+    expect(result.reasons.map((reason) => reason.code)).toEqual(['THUNDERSTORM_RISK', 'RAIN_LIKELY'])
+  })
+
+  it('aggregates the worst advisory and preserves unique reasons across checkpoints', () => {
+    const result = evaluateWeatherAdvisory([{ ...baseWeather, precipitationProbabilityPercent: 70 }, { ...baseWeather, uvIndex: 9 }, { ...baseWeather, visibilityKm: 0.5 }], 'TRANSIT')
+    expect(result.level).toBe('DELAY')
+    expect(result.reasons.map((reason) => reason.code)).toEqual(['VERY_LOW_VISIBILITY', 'RAIN_LIKELY', 'HIGH_UV'])
+  })
+})
+
+describe('summarizeHeatUv', () => {
+  it('returns maxima and transparent break recommendations across all checkpoints', () => {
+    expect(summarizeHeatUv([{ ...baseWeather, feelsLikeC: 36, uvIndex: 9 }, { ...baseWeather, heatIndexC: 41, uvIndex: 5 }])).toEqual({
+      status: 'AVAILABLE', maxFeelsLikeC: 36, maxHeatIndexC: 41, maxUvIndex: 9, breakRecommendation: 'RECOMMENDED', reasons: ['At least one checkpoint has extreme apparent heat.'],
+    })
+  })
+
+  it('handles unavailable, consideration, UV, and normal checkpoint sets', () => {
+    expect(summarizeHeatUv([{ status: 'unavailable' }])).toMatchObject({ status: 'UNAVAILABLE', breakRecommendation: 'NONE' })
+    expect(summarizeHeatUv([{ ...baseWeather, feelsLikeC: 36 }])).toMatchObject({ breakRecommendation: 'CONSIDER', reasons: ['At least one checkpoint has high apparent heat.'] })
+    expect(summarizeHeatUv([{ ...baseWeather, uvIndex: 11 }])).toMatchObject({ breakRecommendation: 'RECOMMENDED', reasons: ['At least one checkpoint has extreme UV exposure.'] })
+    expect(summarizeHeatUv([{ ...baseWeather, uvIndex: 8 }])).toMatchObject({ breakRecommendation: 'CONSIDER', reasons: ['At least one checkpoint has high UV exposure.'] })
+    expect(summarizeHeatUv([baseWeather])).toMatchObject({ status: 'AVAILABLE', breakRecommendation: 'NONE', reasons: ['No heat or UV break threshold was reached at sampled checkpoints.'] })
   })
 })

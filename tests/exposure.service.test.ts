@@ -9,7 +9,13 @@ function route(id: string, minutes: number, pm25: number): RouteCandidate {
     averagePm25: pm25,
     airQualityTimestamp: new Date(0).toISOString(),
     dataQuality: 'modeled_estimate',
+    airQualitySampleCount: 5,
+    airQualityExpectedSampleCount: 5,
     airQualitySamples: [{ latitude: -6.2, longitude: 106.8, pm25 }],
+    providerLabels: [],
+    hazardSummary: { level: 'NONE_REPORTED', reports: [], nearbyCount: 0, confirmedCount: 0, confirmedReportSignalScore: 0, fewerConfirmedReportSignals: 0, limitations: [] },
+    heatUv: {},
+    weatherConditions: [{ status: 'unavailable' }],
   }
 }
 
@@ -42,7 +48,7 @@ describe('rankRoutes', () => {
     const result = rankRoutes([route('later', 12, 10), route('first', 10, 12), route('tie', 10, 12)], { preference: 'lower-exposure', sensitiveUser: false })
     expect(result.map((item) => item.id)).toEqual(['first', 'tie', 'later'])
     expect(result.find((item) => item.labels.includes('FASTEST'))?.id).toBe('first')
-    expect(result.find((item) => item.labels.includes('LOWEST_EXPOSURE'))?.id).toBe('later')
+    expect(result.find((item) => item.labels.includes('LOWEST_EXPOSURE'))?.id).toBe('first')
   })
 
   it('keeps overlapping labels on a route that is fastest, recommended, and lowest exposure', () => {
@@ -56,5 +62,34 @@ describe('rankRoutes', () => {
   it('returns zero reduction when the fastest exposure is zero', () => {
     const result = rankRoutes([route('zero', 10, 0), route('other', 11, 10)], { preference: 'balanced', sensitiveUser: false })
     expect(result.every((item) => item.reductionFromFastestPercent === 0)).toBe(true)
+  })
+
+  it('uses report signals only under the prefer-fewer policy', () => {
+    const fewer = route('fewer', 10, 20)
+    const cleaner = route('cleaner', 10, 10)
+    cleaner.hazardSummary.confirmedReportSignalScore = 6
+    expect(rankRoutes([fewer, cleaner], { preference: 'balanced', sensitiveUser: false, hazardPolicy: 'PREFER_FEWER_REPORTS', accessibilityMode: 'STANDARD' }).find((item) => item.labels.includes('RECOMMENDED'))?.id).toBe('fewer')
+    expect(rankRoutes([fewer, cleaner], { preference: 'balanced', sensitiveUser: false, hazardPolicy: 'ADVISORY_ONLY', accessibilityMode: 'STANDARD' }).find((item) => item.labels.includes('RECOMMENDED'))?.id).toBe('cleaner')
+  })
+
+  it('allows a weak route to win when all routes are weak and reports low completeness', () => {
+    const dirty = route('dirty', 10, 20)
+    const clean = route('clean', 11, 5)
+    for (const item of [dirty, clean]) {
+      item.airQualitySampleCount = 2
+      item.weatherConditions = [{ status: 'unavailable' }]
+    }
+    const result = rankRoutes([dirty, clean], { preference: 'lower-exposure', sensitiveUser: false, hazardPolicy: 'ADVISORY_ONLY', accessibilityMode: 'REDUCED_EXERTION' })
+    expect(result.find((item) => item.labels.includes('RECOMMENDED'))?.id).toBe('clean')
+    expect(result[0].confidence).toMatchObject({ level: 'LOW', limitations: expect.arrayContaining(['Air quality is based on partial route sampling.', 'Weather is unavailable at one or more sampled checkpoints.']) })
+    expect(result[0].accessibility).toMatchObject({ assessment: 'APPROXIMATION' })
+  })
+
+  it('falls back to the fastest route when no strong-air-quality route is within the balanced duration cap', () => {
+    const fastest = route('fast-weak', 10, 20)
+    fastest.airQualitySampleCount = 2
+    const result = rankRoutes([fastest, route('slow-strong', 15, 1)], { preference: 'balanced', sensitiveUser: false, hazardPolicy: 'ADVISORY_ONLY', accessibilityMode: 'STANDARD' })
+    const recommended = result.find((item) => item.labels.includes('RECOMMENDED'))
+    expect(recommended).toMatchObject({ id: 'fast-weak', explanation: { reasons: expect.arrayContaining([expect.stringMatching(/duration cap/i)]), tradeoffs: expect.arrayContaining([expect.stringMatching(/weaker air-quality/i)]) } })
   })
 })

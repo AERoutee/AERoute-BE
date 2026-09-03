@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
 import { z } from 'zod'
+import type { RoadReportVerdict } from '../../generated/prisma/client.js'
 import { AppError } from '../../middleware/index.js'
 import { deleteRoadReportImage, getRoadReportImage, putRoadReportImage } from './providers/index.js'
 import type { RoadReportRepository, StoredReportImage } from './road-report.repository.js'
@@ -10,8 +11,48 @@ const REPORT_LIFETIME_MS = 24 * 60 * 60 * 1000
 const REPORT_RATE_WINDOW_MS = 10 * 60 * 1000
 const REPORT_RATE_MAX = 5
 
-function serializeReport(report: Awaited<ReturnType<RoadReportRepository['create']>>) {
-  return { id: report.id, category: report.category, description: report.description, latitude: report.latitude, longitude: report.longitude, createdAt: report.createdAt.toISOString(), expiresAt: report.expiresAt.toISOString(), images: report.images.map((image) => `/api/v1/road-report-images/${image.id}`), reporter: report.user?.name.split(/\s+/u)[0] ?? 'Community member' }
+type Report = NonNullable<Awaited<ReturnType<RoadReportRepository['findById']>>>
+
+function reportStatus(report: Report) {
+  if (report.resolvedAt) return 'RESOLVED' as const
+  if (report.expiresAt.getTime() <= Date.now()) return 'EXPIRED' as const
+  return 'ACTIVE' as const
+}
+
+function reportEvidence(report: Report, viewerId: string | null) {
+  const confirmations = report.verifications.filter((item) => item.verdict === 'CONFIRM').length
+  const disputes = report.verifications.length - confirmations
+  const ageRatio = Math.max(0, Math.min(1, 1 - (Date.now() - report.createdAt.getTime()) / REPORT_LIFETIME_MS))
+  const netConfirmations = Math.max(0, confirmations - disputes)
+  const factors = {
+    recency: Math.round(ageRatio * 40),
+    photos: Math.min(30, report.images.length * 10),
+    voteBalance: Math.min(30, netConfirmations * 15),
+  }
+  const score = Math.max(0, Math.min(100, factors.recency + factors.photos + factors.voteBalance))
+  return {
+    verification: { confirmations, disputes, viewerVerdict: report.verifications.find((item) => item.userId === viewerId)?.verdict ?? null },
+    evidence: { level: netConfirmations >= 2 && score >= 70 ? 'HIGH' as const : score >= 40 ? 'MEDIUM' as const : 'LOW' as const, score, kind: 'EVIDENCE_SCORE' as const, factors },
+  }
+}
+
+function serializeReport(report: Report, viewerId: string | null) {
+  const status = reportStatus(report)
+  return {
+    id: report.id,
+    category: report.category,
+    description: report.description,
+    latitude: report.latitude,
+    longitude: report.longitude,
+    createdAt: report.createdAt.toISOString(),
+    expiresAt: report.expiresAt.toISOString(),
+    resolvedAt: report.resolvedAt?.toISOString() ?? null,
+    status,
+    images: status === 'ACTIVE' ? report.images.map((image) => `/api/v1/road-report-images/${image.id}`) : [],
+    reporter: report.user?.name.split(/\s+/u)[0] ?? 'Community member',
+    isOwner: Boolean(viewerId && report.userId === viewerId),
+    ...reportEvidence(report, viewerId),
+  }
 }
 
 export class RoadReportService {
@@ -34,7 +75,7 @@ export class RoadReportService {
         uploaded.push({ objectKey, imageUrl, position, width: output.info.width, height: output.info.height })
       }
       const report = await this.repository.create({ id: reportId, userId, category: input.category, description: input.description, latitude: input.latitude, longitude: input.longitude, expiresAt: new Date(Date.now() + REPORT_LIFETIME_MS), images: uploaded })
-      return serializeReport(report)
+      return serializeReport(report, userId)
     } catch (error) {
       await Promise.all(uploaded.map((image) => deleteRoadReportImage(image.objectKey)))
       throw error
@@ -45,12 +86,44 @@ export class RoadReportService {
     const id = z.string().uuid().safeParse(rawId)
     if (!id.success) throw new AppError(404, 'report_image_not_found', 'Report image was not found.', false)
     const image = await this.repository.findImage(id.data)
-    if (!image) throw new AppError(404, 'report_image_not_found', 'Report image was not found.', false)
+    if (!image || image.report.resolvedAt || image.report.expiresAt.getTime() <= Date.now()) throw new AppError(404, 'report_image_not_found', 'Report image was not found.', false)
     return getRoadReportImage(image.objectKey)
   }
 
-  async nearby(bounds: NearbyRoadReportsInput) {
-    const reports = await this.repository.findNearby(bounds)
-    return reports.map(serializeReport)
+  async nearby(bounds: NearbyRoadReportsInput, viewerId: string | null) {
+    return (await this.repository.findNearby(bounds, new Date())).filter((report) => reportStatus(report) === 'ACTIVE').map((report) => serializeReport(report, viewerId))
+  }
+
+  async mine(userId: string) {
+    return (await this.repository.findMine(userId)).map((report) => serializeReport(report, userId))
+  }
+
+  async verify(reportId: string, userId: string, verdict: RoadReportVerdict) {
+    const report = await this.report(reportId)
+    if (report.userId === userId) throw new AppError(400, 'report_self_verification', 'You cannot verify your own report.', false)
+    const verified = await this.repository.verifyActive(reportId, userId, verdict, new Date())
+    if (!verified) throw new AppError(409, 'report_inactive', 'Only active reports can be verified.', false)
+    return reportEvidence(verified, userId)
+  }
+
+  async retractVerification(reportId: string, userId: string) {
+    await this.report(reportId)
+    await this.repository.deleteVerification(reportId, userId)
+    return reportEvidence(await this.report(reportId), userId)
+  }
+
+  async resolve(reportId: string, userId: string) {
+    const report = await this.report(reportId)
+    if (report.userId !== userId) throw new AppError(404, 'road_report_not_found', 'Road report was not found.', false)
+    if (report.resolvedAt) return serializeReport(report, userId)
+    const resolved = await this.repository.resolveActive(reportId, userId, new Date())
+    if (!resolved) throw new AppError(409, 'report_inactive', 'Only active reports can be resolved.', false)
+    return serializeReport(resolved, userId)
+  }
+
+  private async report(id: string) {
+    const report = await this.repository.findById(id)
+    if (!report) throw new AppError(404, 'road_report_not_found', 'Road report was not found.', false)
+    return report
   }
 }

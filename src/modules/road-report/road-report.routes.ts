@@ -17,6 +17,10 @@ export default function createRoadReportRoutes(controller: RoadReportController)
   const router = Router()
   router.get('/road-report-images/:id', asyncHandler(controller.image))
   router.get('/road-reports', asyncHandler(controller.nearby))
+  router.get('/road-reports/mine', asyncHandler(authMiddleware), asyncHandler(controller.mine))
   router.post('/road-reports', asyncHandler(authMiddleware), upload.array('images', 3), asyncHandler(controller.create))
+  router.put('/road-reports/:id/verification', asyncHandler(authMiddleware), asyncHandler(controller.verify))
+  router.delete('/road-reports/:id/verification', asyncHandler(authMiddleware), asyncHandler(controller.retractVerification))
+  router.patch('/road-reports/:id', asyncHandler(authMiddleware), asyncHandler(controller.resolve))
   return router
 }

@@ -1,0 +1,5 @@
+export * from './insights.controller.js'
+export * from './insights.repository.js'
+export { default as createInsightsRoutes } from './insights.routes.js'
+export * from './insights.service.js'
+export * from './insights.validation.js'

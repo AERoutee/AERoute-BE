@@ -30,7 +30,7 @@ export const errorHandler: import('express').ErrorRequestHandler = (error: unkno
   }
   const databaseCode = error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
   if (!(error instanceof AppError)) console.error('Request failed', { path: request.path, name: error instanceof Error ? error.name : 'UnknownError', code: databaseCode || undefined, message: error instanceof Error ? error.message : 'Unknown error' })
-  const databaseError = databaseCode === 'P1001' || databaseCode === 'P1002' || databaseCode === 'P2021' ? new AppError(503, 'database_unavailable', 'The service database is not ready.', true) : null
+  const databaseError = databaseCode === 'P2022' ? new AppError(503, 'database_migration_required', 'The service database schema is out of date. Apply pending migrations.', false) : databaseCode === 'P1001' || databaseCode === 'P1002' || databaseCode === 'P1008' || databaseCode === 'P2021' ? new AppError(503, 'database_unavailable', 'The service database is not ready.', true) : null
   const appError = error instanceof AppError ? error : databaseError ?? new AppError(500, 'internal_error', 'An unexpected server error occurred.', true)
   response.status(appError.statusCode).json({ error: { code: appError.code, message: appError.message, retryable: appError.retryable } })
 }

@@ -85,7 +85,7 @@ describe('central error formatting', () => {
     expect(res.json).toHaveBeenCalledWith({ error: { code: responseCode, message, retryable: false } })
   })
 
-  it.each(['P1001', 'P1002', 'P2021'])('maps Prisma %s readiness failures', (code) => {
+  it.each(['P1001', 'P1002', 'P1008', 'P2021'])('maps Prisma %s readiness failures', (code) => {
     const res = run(Object.assign(new Error('db'), { code }))
     expect(res.status).toHaveBeenCalledWith(503)
     expect(res.json).toHaveBeenCalledWith({ error: { code: 'database_unavailable', message: 'The service database is not ready.', retryable: true } })
