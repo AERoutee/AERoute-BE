@@ -28,10 +28,33 @@ describe('Google Routes provider', () => {
     expect(fieldMask).toEqual(expect.stringContaining('routes.legs.steps.startLocation'))
     expect(fieldMask).toEqual(expect.stringContaining('routes.legs.steps.endLocation'))
     expect(fieldMask).toEqual(expect.stringContaining('routes.legs.steps.polyline.encodedPolyline'))
+    expect(fieldMask).toEqual(expect.stringContaining('routes.legs.steps.navigationInstruction.instructions'))
+    expect(fieldMask).toEqual(expect.stringContaining('routes.legs.steps.navigationInstruction.maneuver'))
     expect(fieldMask).toEqual(expect.stringContaining('routes.legs.steps.transitDetails.stopDetails.departureTime'))
     expect(fieldMask).toEqual(expect.stringContaining('routes.legs.steps.transitDetails.stopDetails.arrivalTime'))
     expect(fieldMask).toEqual(expect.stringContaining('routes.warnings'))
-    expect(JSON.parse(String(init.body))).toEqual({ origin: { location: { latLng: input.origin } }, destination: { location: { latLng: input.destination } }, travelMode: 'WALK', computeAlternativeRoutes: true, polylineQuality: 'HIGH_QUALITY', languageCode: 'en', units: 'METRIC' })
+    expect(JSON.parse(String(init.body))).toEqual({ origin: { location: { latLng: input.origin } }, destination: { location: { latLng: input.destination } }, travelMode: 'WALK', computeAlternativeRoutes: true, polylineQuality: 'HIGH_QUALITY', languageCode: 'id', units: 'METRIC' })
+  })
+
+  it('preserves navigation instructions for active travel', async () => {
+    fetchMock.mockResolvedValue(providerResponse({ routes: [{ distanceMeters: 100, duration: '60s', polyline: { encodedPolyline: 'route' }, legs: [{ steps: [{ travelMode: 'WALK', staticDuration: '60s', distanceMeters: 100, startLocation: { latLng: { latitude: -6.2, longitude: 106.8 } }, endLocation: { latLng: { latitude: -6.21, longitude: 106.81 } }, polyline: { encodedPolyline: 'step' }, navigationInstruction: { instructions: 'Belok kiri ke Jalan Utama', maneuver: 'TURN_LEFT' } }] }] }] }))
+
+    await expect(getRoutes(input)).resolves.toEqual([expect.objectContaining({ navigationSteps: [{ instruction: 'Belok kiri ke Jalan Utama', maneuver: 'TURN_LEFT', travelMode: 'WALK', durationSeconds: 60, distanceMeters: 100, encodedPolyline: 'step', startLocation: { latitude: -6.2, longitude: 106.8 }, endLocation: { latitude: -6.21, longitude: 106.81 } }] })])
+  })
+
+  it('keeps transit routes usable when optional provider metadata is partial or null', async () => {
+    fetchMock.mockResolvedValue(providerResponse({ routes: [{ distanceMeters: 100, duration: '60s', polyline: { encodedPolyline: 'route' }, routeLabels: null, warnings: null, legs: [{ steps: [
+      { travelMode: 'WALK', staticDuration: null, distanceMeters: null, startLocation: null, endLocation: null, polyline: null, navigationInstruction: { instructions: null, maneuver: 'DEPART' }, transitDetails: null },
+      { travelMode: 'TRANSIT', transitDetails: { headsign: null, stopDetails: null, transitLine: { name: 'Bus 1', nameShort: null, vehicle: { type: null, name: null } } } },
+    ] }] }] }))
+
+    await expect(getRoutes({ ...input, mode: 'TRANSIT', transitModes: ['BUS'] })).resolves.toEqual([expect.objectContaining({ providerLabels: [], navigationSteps: [expect.objectContaining({ instruction: 'Mulai perjalanan', maneuver: 'DEPART' })], transitSummary: expect.objectContaining({ actualTransitModes: [], segments: [expect.objectContaining({ travelMode: 'WALK' }), expect.objectContaining({ travelMode: 'TRANSIT', lineName: 'Bus 1' })] }) })])
+  })
+
+  it('turns a provider maneuver into usable guidance when instruction text is absent', async () => {
+    fetchMock.mockResolvedValue(providerResponse({ routes: [{ distanceMeters: 100, duration: '60s', polyline: { encodedPolyline: 'route' }, legs: [{ steps: [{ travelMode: 'WALK', distanceMeters: 100, navigationInstruction: { maneuver: 'TURN_LEFT' } }] }] }] }))
+
+    await expect(getRoutes(input)).resolves.toEqual([expect.objectContaining({ navigationSteps: [expect.objectContaining({ instruction: 'Belok kiri', maneuver: 'TURN_LEFT', travelMode: 'WALK' })] })])
   })
 
   it('builds transit requests and preserves ordered step geometry, schedules, warnings, and actual modes across legs', async () => {

@@ -21,6 +21,17 @@ describe('Google Air Quality provider', () => {
     expect(fetchMock.mock.calls.every(([url]) => String(url).includes('currentConditions:lookup'))).toBe(true)
   })
 
+  it('coalesces concurrent lookups for the same rounded point and time bucket', async () => {
+    const releases: Array<(value: Response) => void> = []
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => { releases.push(resolve) }))
+    const first = getRouteAirQuality(polyline, new Date('2026-09-09T10:00:00.000Z'), 0, new Date('2026-09-09T10:00:00.000Z'))
+    const second = getRouteAirQuality(polyline, new Date('2026-09-09T10:00:00.000Z'), 0, new Date('2026-09-09T10:00:00.000Z'))
+    await Promise.resolve()
+    expect(fetchMock).toHaveBeenCalledTimes(5)
+    releases.forEach((release) => release(response({ dateTime: '2026-09-09T10:00:00.000Z', pollutants: pollutants(12) })))
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+  })
+
   it('uses forecast lookup with target dateTime and hourly disclosure for future offsets', async () => {
     fetchMock.mockImplementation(() => Promise.resolve(response({ hourlyForecasts: [{ dateTime: '2026-09-01T10:00:00.000Z', pollutants: pollutants(8) }] })))
     const now = new Date('2026-09-01T10:10:00.000Z')
@@ -42,11 +53,16 @@ describe('Google Air Quality provider', () => {
 
   it('maps network, invalid payload, missing pollutant, and complete temporary failures', async () => {
     fetchMock.mockRejectedValue(new TypeError('network'))
-    await expect(getRouteAirQuality(polyline, new Date('2026-09-03T10:30:00.000Z'), 0, new Date('2026-09-03T10:00:00.000Z'))).rejects.toMatchObject({ code: 'air_quality_unavailable' })
+    await expect(getRouteAirQuality(polyline, new Date('2026-09-03T10:30:00.000Z'), 0, new Date('2026-09-03T10:00:00.000Z'))).rejects.toMatchObject({ code: 'air_quality_provider_unavailable' })
     fetchMock.mockImplementation(() => Promise.resolve(response({ bad: true })))
-    await expect(getRouteAirQuality(polyline, new Date('2026-09-04T10:30:00.000Z'), 0, new Date('2026-09-04T10:00:00.000Z'))).rejects.toMatchObject({ code: 'air_quality_unavailable' })
+    await expect(getRouteAirQuality(polyline, new Date('2026-09-04T10:30:00.000Z'), 0, new Date('2026-09-04T10:00:00.000Z'))).rejects.toMatchObject({ code: 'invalid_air_quality_response' })
     fetchMock.mockImplementation(() => Promise.resolve(response({ hourlyForecasts: [{ dateTime: '2026-09-05T10:00:00.000Z', pollutants: [] }] })))
-    await expect(getRouteAirQuality(polyline, new Date('2026-09-05T10:30:00.000Z'), 0, new Date('2026-09-05T10:00:00.000Z'))).rejects.toMatchObject({ code: 'air_quality_unavailable' })
+    await expect(getRouteAirQuality(polyline, new Date('2026-09-05T10:30:00.000Z'), 0, new Date('2026-09-05T10:00:00.000Z'))).rejects.toMatchObject({ code: 'pm25_unavailable' })
+  })
+
+  it('preserves unrecognized permanent provider errors', async () => {
+    fetchMock.mockResolvedValue(response({ error: { status: 'PERMISSION_DENIED' } }, 403))
+    await expect(getRouteAirQuality(polyline, new Date('2026-09-06T10:30:00.000Z'), 0, new Date('2026-09-06T10:00:00.000Z'))).rejects.toMatchObject({ code: 'air_quality_provider_error', retryable: false })
   })
 
   it.each([

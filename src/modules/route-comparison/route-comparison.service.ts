@@ -5,7 +5,7 @@ import type { RoadReportRepository } from '../road-report/road-report.repository
 import { rankRoutes, type HazardLevel, type HazardSummary, type RouteCandidate } from './exposure.service.js'
 import { getRouteAirQuality } from './providers/google-air-quality.provider.js'
 import { getPlacePhoto, getRestStopCandidates } from './providers/google-places.provider.js'
-import { getRoutes, type CompositeSegment, type ProviderRoute, type TransitSegment } from './providers/google-routes.provider.js'
+import { getRoutes, type CompositeSegment, type NavigationStep, type ProviderRoute, type TransitSegment } from './providers/google-routes.provider.js'
 import { getForecastWeather } from './providers/google-weather.provider.js'
 import type { RouteComparisonRepository } from './route-comparison.repository.js'
 import type { RouteComparisonRequest } from './route-comparison.validation.js'
@@ -13,6 +13,7 @@ import { evaluateWeatherAdvisory, summarizeHeatUv, type WeatherConditions } from
 
 const CALCULATION_VERSION = 'route-intelligence-v2'
 const HAZARD_DISTANCE_METERS = 100
+const REST_STOP_DISTANCE_METERS = 250
 const WEATHER_CHECKPOINTS = 5
 
 type ActiveReport = NonNullable<Awaited<ReturnType<RoadReportRepository['findActiveInBounds']>>>[number]
@@ -103,6 +104,10 @@ function completeStep(segment: TransitSegment): segment is TransitSegment & { du
   return segment.durationSeconds !== undefined && segment.distanceMeters !== undefined && Boolean(segment.encodedPolyline)
 }
 
+function segmentNavigationStep(segment: TransitSegment): NavigationStep[] {
+  return segment.instruction ? [{ instruction: segment.instruction, ...(segment.maneuver ? { maneuver: segment.maneuver } : {}), travelMode: segment.travelMode, ...(segment.durationSeconds !== undefined ? { durationSeconds: segment.durationSeconds } : {}), ...(segment.distanceMeters !== undefined ? { distanceMeters: segment.distanceMeters } : {}), ...(segment.encodedPolyline ? { encodedPolyline: segment.encodedPolyline } : {}), ...(segment.startLocation ? { startLocation: segment.startLocation } : {}), ...(segment.endLocation ? { endLocation: segment.endLocation } : {}) }] : []
+}
+
 async function composeRoutes(input: RouteComparisonRequest, now: Date): Promise<ProviderRoute[]> {
   const transitRoutes = (await getRoutes(input, 0, now)).slice(0, 2)
   const composed: ProviderRoute[] = []
@@ -185,6 +190,7 @@ async function composeRoutes(input: RouteComparisonRequest, now: Date): Promise<
         encodedPolyline: encodePolyline(points),
         providerLabels: route.providerLabels,
         warnings: Array.from(new Set([...(route.warnings ?? []), ...(bicycle.warnings ?? []), ...(walking.warnings ?? [])])),
+        navigationSteps: [...(bicycle.navigationSteps ?? []), ...included.flatMap(segmentNavigationStep), ...(walking.navigationSteps ?? [])],
         composition: 'PROVIDER_SEGMENTS',
         scheduleStatus: 'SCHEDULE_VALIDATED',
         limitations: COMPOSITE_LIMITATIONS,
@@ -227,7 +233,7 @@ export class RouteComparisonService {
       try {
         return { offset, routes: baseRoutes ?? await getRoutes(input, offset, now) }
       } catch (error) {
-        if (offset === 0 || error instanceof AppError && !error.retryable) throw error
+        if (offset === 0) throw error
         return { offset, routes: null, warning: 'Routes are unavailable for this future departure window.' }
       }
     }))
@@ -251,7 +257,10 @@ export class RouteComparisonService {
       const departureTime = new Date(now.getTime() + window.offset * 60_000)
       const candidateResults = await Promise.allSettled(window.routes.map(async (route, routeIndex): Promise<RouteCandidate> => {
         const points = samplePolyline(geometry(route), WEATHER_CHECKPOINTS)
-        const airQuality = await getRouteAirQuality(route.encodedPolyline, departureTime, route.durationSeconds, now)
+        const airQuality = await getRouteAirQuality(route.encodedPolyline, departureTime, route.durationSeconds, now).catch((error) => {
+          if (error instanceof AppError && !error.retryable) throw error
+          return { averagePm25: null, timestamp: null, dataQuality: 'unavailable' as const, sampleCount: 0, expectedSampleCount: WEATHER_CHECKPOINTS, samples: [] }
+        })
         const weatherConditions = await Promise.all(points.map((point, pointIndex) => {
           const progress = points.length === 1 ? 0 : pointIndex / (points.length - 1)
           const target = new Date(departureTime.getTime() + route.durationSeconds * progress * 1000)
@@ -270,11 +279,11 @@ export class RouteComparisonService {
           weatherConditions,
         }
       }))
-      const permanentError = candidateResults.find((result): result is PromiseRejectedResult => result.status === 'rejected' && result.reason instanceof AppError && !result.reason.retryable)
-      if (permanentError && window.offset === 0) throw permanentError.reason
+      const providerError = candidateResults.find((result): result is PromiseRejectedResult => result.status === 'rejected' && result.reason instanceof AppError && !result.reason.retryable) ?? candidateResults.find((result): result is PromiseRejectedResult => result.status === 'rejected' && result.reason instanceof AppError)
+      if (providerError && window.offset === 0 && candidateResults.every((result) => result.status === 'rejected')) throw providerError.reason
       const candidates = candidateResults.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
       if (!candidates.length) {
-        const warning = permanentError ? `Future air-quality configuration error: ${permanentError.reason.code}.` : 'Air-quality forecasts are unavailable for this future departure window.'
+        const warning = providerError && !providerError.reason.retryable ? `Future air-quality configuration error: ${providerError.reason.code}.` : 'Air-quality forecasts are unavailable for this future departure window.'
         comparisons.push(unavailableDeparture(window.offset, warning))
         warnings.push(warning)
         continue
@@ -301,34 +310,40 @@ export class RouteComparisonService {
     let comparisonId: string = randomUUID()
     let responseRoutes = current.routes
     let recommendedRouteResultId: string | undefined
-    if (!composite) {
-      const stored = await this.repository.create({ userId: userId!, input, routes: current.routes, calculationVersion: CALCULATION_VERSION })
+    const airQualityUnavailable = current.routes.some((route) => route.dataQuality === 'unavailable')
+    if (!composite && !airQualityUnavailable) {
+      const stored = await this.repository.create({ userId: userId!, input, routes: current.routes as Array<typeof current.routes[number] & { estimatedExposureIndex: number; averagePm25: number; reductionFromFastestPercent: number; airQualityTimestamp: string; dataQuality: 'modeled_estimate' | 'partial_estimate' }>, calculationVersion: CALCULATION_VERSION })
       comparisonId = stored.comparisonId
       recommendedRouteResultId = stored.routeResultIds[recommended.id]
       responseRoutes = current.routes.map((route) => ({ ...route, routeResultId: stored.routeResultIds[route.id] }))
       current.routes = responseRoutes
     }
     let restStops = input.includeRestStops ? await getRestStopCandidates(recommended.encodedPolyline) : { status: 'NOT_REQUESTED' as const, candidates: [] }
+    if (restStops.status === 'AVAILABLE') {
+      const routePoints = geometry(recommended)
+      restStops = { ...restStops, candidates: restStops.candidates.filter((candidate) => pointToPolylineDistanceMeters(candidate.location, routePoints) <= REST_STOP_DISTANCE_METERS) }
+    }
     if (restStops.status === 'AVAILABLE' && recommendedRouteResultId) {
       const associations = await this.repository.savePlaceAssociations(userId, recommendedRouteResultId, 'REST_STOP', restStops.candidates.map((candidate, ordinal) => ({ placeId: candidate.id, ordinal })))
       const associationIds = new Map(associations.map((association) => [association.ordinal, association.id]))
       restStops = { ...restStops, candidates: restStops.candidates.map((candidate, ordinal) => ({ ...candidate, associationId: associationIds.get(ordinal) })) }
     }
     if (restStops.status === 'UNAVAILABLE') warnings.push(restStops.warning)
-    if (current.routes.some((route) => route.dataQuality === 'partial_estimate')) warnings.push('Some route samples were unavailable; this comparison uses partial air-quality coverage.')
+    if (airQualityUnavailable) warnings.push('PM2.5 data is temporarily unavailable; routes are ranked without air-quality exposure.')
+    else if (current.routes.some((route) => route.dataQuality === 'partial_estimate')) warnings.push('Some route samples were unavailable; this comparison uses partial air-quality coverage.')
     if (input.accessibilityMode === 'REDUCED_EXERTION') warnings.push('Reduced exertion is an approximation and does not verify wheelchair access or step-free travel.')
     if (composite) warnings.push(ACTIVE_TRAVEL_BETA_WARNING, ...allProviderRoutes.flatMap((route) => route.warnings ?? []))
     return {
       comparisonId,
-      persisted: !composite,
+      persisted: !composite && !airQualityUnavailable,
       calculationVersion: CALCULATION_VERSION,
       routes: responseRoutes,
       departureComparisons: comparisons,
-      cleanestDeparture: [...comparisons].filter((comparison) => comparison.status === 'AVAILABLE').sort((left, right) => {
+      cleanestDeparture: airQualityUnavailable ? null : [...comparisons].filter((comparison) => comparison.status === 'AVAILABLE').sort((left, right) => {
         const leftRoute = left.routes.find((route) => route.labels.includes('LOWEST_EXPOSURE')) ?? left.routes.find((route) => route.labels.includes('RECOMMENDED')) ?? left.routes[0]
         const rightRoute = right.routes.find((route) => route.labels.includes('LOWEST_EXPOSURE')) ?? right.routes.find((route) => route.labels.includes('RECOMMENDED')) ?? right.routes[0]
-        return leftRoute.estimatedExposureIndex - rightRoute.estimatedExposureIndex || left.offsetMinutes - right.offsetMinutes
-      })[0]?.offsetMinutes ?? 0,
+        return (leftRoute.estimatedExposureIndex ?? Number.POSITIVE_INFINITY) - (rightRoute.estimatedExposureIndex ?? Number.POSITIVE_INFINITY) || left.offsetMinutes - right.offsetMinutes
+      })[0]?.offsetMinutes ?? null,
       weather: recommended.weatherConditions[Math.floor(recommended.weatherConditions.length / 2)] ?? { status: 'unavailable' as const },
       weatherPoints: samplePolyline(geometry(recommended), WEATHER_CHECKPOINTS).map((point, index) => ({ ...point, conditions: recommended.weatherConditions[index] })),
       weatherPointsByRoute: Object.fromEntries(current.routes.map((route) => [route.id, samplePolyline(geometry(route), WEATHER_CHECKPOINTS).map((point, index) => ({ ...point, conditions: route.weatherConditions[index] }))])),

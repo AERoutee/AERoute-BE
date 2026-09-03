@@ -18,6 +18,7 @@ const forecastResponseSchema = z.object({ hourlyForecasts: z.array(z.object({ da
 
 type AirSample = { pm25: number; timestamp: string }
 const cache = new Map<string, { expiresAt: number; value: AirSample }>()
+const inFlight = new Map<string, Promise<AirSample>>()
 
 async function providerError(response: Response) {
   const parsed = googleErrorSchema.safeParse(await response.json().catch(() => null))
@@ -41,29 +42,29 @@ async function lookup(point: GeoPoint, target: Date, now: Date, forecast: boolea
   const cacheKey = `${point.latitude.toFixed(3)},${point.longitude.toFixed(3)}:${bucket}`
   const cached = cache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) return cached.value
-  const url = new URL(forecast ? 'https://airquality.googleapis.com/v1/forecast:lookup' : 'https://airquality.googleapis.com/v1/currentConditions:lookup')
-  url.searchParams.set('key', apiKey)
-  const response = await fetch(url, {
-    method: 'POST',
-    signal: AbortSignal.timeout(env.PROVIDER_TIMEOUT_MS),
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      location: point,
-      universalAqi: true,
-      extraComputations: ['POLLUTANT_CONCENTRATION'],
-      languageCode: 'en',
-      ...(forecast ? { dateTime: target.toISOString() } : {}),
-    }),
-  }).catch(() => { throw new AppError(503, 'air_quality_provider_unavailable', 'Air-quality data is temporarily unavailable.', true) })
-  if (!response.ok) throw await providerError(response)
-  const payload: unknown = await response.json().catch(() => null)
-  const current = forecast ? null : currentResponseSchema.safeParse(payload)
-  const future = forecast ? forecastResponseSchema.safeParse(payload) : null
-  const value = current?.success ? sampleFrom(current.data.pollutants, current.data.dateTime) : future?.success ? sampleFrom(future.data.hourlyForecasts[0].pollutants, future.data.hourlyForecasts[0].dateTime) : null
-  if (!value) throw new AppError(502, 'invalid_air_quality_response', 'Air-quality service returned an invalid response.', true)
-  if (cache.size >= 500) cache.delete(cache.keys().next().value ?? '')
-  cache.set(cacheKey, { value, expiresAt: Date.now() + 10 * 60 * 1000 })
-  return value
+  const pending = inFlight.get(cacheKey)
+  if (pending) return pending
+  const request = (async () => {
+    const url = new URL(forecast ? 'https://airquality.googleapis.com/v1/forecast:lookup' : 'https://airquality.googleapis.com/v1/currentConditions:lookup')
+    url.searchParams.set('key', apiKey)
+    const response = await fetch(url, {
+      method: 'POST',
+      signal: AbortSignal.timeout(env.PROVIDER_TIMEOUT_MS),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location: point, universalAqi: true, extraComputations: ['POLLUTANT_CONCENTRATION'], languageCode: 'en', ...(forecast ? { dateTime: target.toISOString() } : {}) }),
+    }).catch(() => { throw new AppError(503, 'air_quality_provider_unavailable', 'Air-quality data is temporarily unavailable.', true) })
+    if (!response.ok) throw await providerError(response)
+    const payload: unknown = await response.json().catch(() => null)
+    const current = forecast ? null : currentResponseSchema.safeParse(payload)
+    const future = forecast ? forecastResponseSchema.safeParse(payload) : null
+    const value = current?.success ? sampleFrom(current.data.pollutants, current.data.dateTime) : future?.success ? sampleFrom(future.data.hourlyForecasts[0].pollutants, future.data.hourlyForecasts[0].dateTime) : null
+    if (!value) throw new AppError(502, 'invalid_air_quality_response', 'Air-quality service returned an invalid response.', true)
+    if (cache.size >= 500) cache.delete(cache.keys().next().value ?? '')
+    cache.set(cacheKey, { value, expiresAt: Date.now() + 10 * 60 * 1000 })
+    return value
+  })()
+  inFlight.set(cacheKey, request)
+  try { return await request } finally { if (inFlight.get(cacheKey) === request) inFlight.delete(cacheKey) }
 }
 
 export async function getRouteAirQuality(encodedPolyline: string, departureTime = new Date(), durationSeconds = 0, now = new Date()) {
@@ -75,11 +76,12 @@ export async function getRouteAirQuality(encodedPolyline: string, departureTime 
   }
   if (!points.length) throw new AppError(502, 'invalid_route_geometry', 'Route geometry could not be sampled.', true)
   const forecast = departureTime.getTime() > now.getTime()
-  const results = await Promise.allSettled(points.map((point, index) => lookup(point, new Date(departureTime.getTime() + durationSeconds * (points.length === 1 ? 0 : index / (points.length - 1)) * 1000), now, forecast)))
-  const configurationError = results.find((result): result is PromiseRejectedResult => result.status === 'rejected' && result.reason instanceof AppError && !result.reason.retryable && result.reason.statusCode === 503)
-  if (configurationError) throw configurationError.reason
-  const samples = results.flatMap((result, index) => result.status === 'fulfilled' ? [{ ...points[index], ...result.value }] : [])
-  if (!samples.length) throw new AppError(503, 'air_quality_unavailable', 'Air-quality data is temporarily unavailable.', true)
+  const results = await Promise.allSettled(points.map(async (point, index) => ({ ...point, ...await lookup(point, new Date(departureTime.getTime() + durationSeconds * (points.length === 1 ? 0 : index / (points.length - 1)) * 1000), now, forecast) })))
+  const providerErrors = results.flatMap((result) => result.status === 'rejected' && result.reason instanceof AppError ? [result.reason] : [])
+  const permanentError = providerErrors.find((error) => !error.retryable)
+  if (permanentError) throw permanentError
+  const samples = results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+  if (!samples.length) throw providerErrors[0] ?? new AppError(503, 'air_quality_unavailable', 'Air-quality data is temporarily unavailable.', true)
   return {
     averagePm25: samples.reduce((total, sample) => total + sample.pm25, 0) / samples.length,
     timestamp: samples.map((sample) => sample.timestamp).sort().at(-1)!,

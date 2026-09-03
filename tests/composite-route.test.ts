@@ -135,6 +135,25 @@ describe('bicycle transit walk composition service', () => {
     expect(result.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/Google Maps.*walking.*cycling.*beta/i)]))
   })
 
+  it('preserves feeder, retained transit, transfer, and last-mile navigation instructions in order', async () => {
+    const instructedTransit = { ...transitRoute, transitSummary: { ...transitRoute.transitSummary, segments: transitRoute.transitSummary.segments.map((segment, index) => ({ ...segment, instruction: ['Old access walk', 'Naik Bus 1', 'Belok kiri ke peron berikutnya', 'Naik Rail 2', 'Old exit walk'][index], maneuver: ['STRAIGHT', 'STRAIGHT', 'TURN_LEFT', 'STRAIGHT', 'TURN_RIGHT'][index] })) } }
+    const instructedBicycle = { ...bicycleRoute, navigationSteps: [{ instruction: 'Belok kanan ke jalur sepeda', maneuver: 'TURN_RIGHT', travelMode: 'BICYCLE', distanceMeters: 1200 }] }
+    const instructedWalk = { ...walkRoute, navigationSteps: [{ instruction: 'Belok kiri menuju tujuan', maneuver: 'TURN_LEFT', travelMode: 'WALK', distanceMeters: 450 }] }
+    routesMock.mockImplementation(async (request) => request.mode === 'TRANSIT' ? [instructedTransit] as never : request.mode === 'BICYCLE' ? [instructedBicycle] : [instructedWalk])
+
+    const result = await new RouteComparisonService(repository(), roadReports() as never).compare(input, 'user-1')
+
+    expect(result.routes[0].navigationSteps).toEqual([
+      expect.objectContaining({ instruction: 'Belok kanan ke jalur sepeda', maneuver: 'TURN_RIGHT', travelMode: 'BICYCLE' }),
+      expect.objectContaining({ instruction: 'Naik Bus 1', travelMode: 'TRANSIT' }),
+      expect.objectContaining({ instruction: 'Belok kiri ke peron berikutnya', maneuver: 'TURN_LEFT', travelMode: 'WALK' }),
+      expect.objectContaining({ instruction: 'Naik Rail 2', travelMode: 'TRANSIT' }),
+      expect.objectContaining({ instruction: 'Belok kiri menuju tujuan', maneuver: 'TURN_LEFT', travelMode: 'WALK' }),
+    ])
+    expect(result.routes[0].navigationSteps?.map((step) => step.instruction)).not.toContain('Old access walk')
+    expect(result.routes[0].navigationSteps?.map((step) => step.instruction)).not.toContain('Old exit walk')
+  })
+
   it('retains at most two transit candidates and makes no more than five provider calls without active alternatives', async () => {
     const alternatives = [transitRoute, { ...transitRoute, id: 'route_2' }, { ...transitRoute, id: 'route_3' }]
     mockSuccessfulComposition(alternatives)

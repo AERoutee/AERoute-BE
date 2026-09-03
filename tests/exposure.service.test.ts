@@ -35,6 +35,15 @@ describe('rankRoutes', () => {
     expect(result.find((item) => item.labels.includes('RECOMMENDED'))?.id).toBe('cleanest')
   })
 
+  it('keeps routing usable without fabricating air-quality values', () => {
+    const unavailable = { ...route('unavailable', 10, 20), averagePm25: null, airQualityTimestamp: null, dataQuality: 'unavailable' as const, airQualitySampleCount: 0, airQualitySamples: [] }
+    const result = rankRoutes([unavailable], { preference: 'lower-exposure', sensitiveUser: false, hazardPolicy: 'ADVISORY_ONLY', accessibilityMode: 'STANDARD' })
+
+    expect(result[0]).toMatchObject({ labels: ['FASTEST', 'RECOMMENDED'], averagePm25: null, estimatedExposureIndex: null, reductionFromFastestPercent: null, confidence: { factors: { airQualityCoverage: 0 }, limitations: expect.arrayContaining(['Air quality is unavailable for this route.']) } })
+    expect(result[0].labels).not.toContain('LOWEST_EXPOSURE')
+    expect(JSON.stringify(result[0].explanation)).not.toMatch(/modeled exposure|PM2\.5-time/i)
+  })
+
   it('returns an empty list for no candidates', () => {
     expect(rankRoutes([], { preference: 'balanced', sensitiveUser: false })).toEqual([])
   })

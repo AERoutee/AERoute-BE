@@ -74,15 +74,16 @@ describe('route comparison service', () => {
 
   it('persists rest-stop Place IDs against the recommended route by ordinal and maps association IDs', async () => {
     const repo = repository()
-    repo.savePlaceAssociations.mockResolvedValue([{ id: 'association-1', ordinal: 0 }, { id: 'association-2', ordinal: 1 }])
+    repo.savePlaceAssociations.mockResolvedValue([{ id: 'association-1', ordinal: 0 }])
     placesMock.mockResolvedValue({ status: 'AVAILABLE', candidates: [
-      { id: 'place-1', name: 'One', location: { latitude: 1, longitude: 2 }, types: ['cafe'], safetyVerified: false },
-      { id: 'place-2', name: 'Two', location: { latitude: 3, longitude: 4 }, types: ['park'], safetyVerified: false },
+      { id: 'place-1', name: 'Near route', location: { latitude: 38.5003, longitude: -120.2 }, types: ['cafe'], safetyVerified: false },
+      { id: 'place-2', name: 'Far from route', location: { latitude: 38.51, longitude: -120.2 }, types: ['park'], safetyVerified: false },
     ] })
     const result = await new RouteComparisonService(repo, roadReports() as never).compare(baseInput, 'user-1')
-    expect(repo.savePlaceAssociations).toHaveBeenCalledWith('user-1', '11111111-1111-4111-8111-111111111111', 'REST_STOP', [{ placeId: 'place-1', ordinal: 0 }, { placeId: 'place-2', ordinal: 1 }])
-    expect(result.restStopCandidates).toMatchObject({ status: 'AVAILABLE', candidates: [{ associationId: 'association-1' }, { associationId: 'association-2' }] })
-    expect(JSON.stringify(repo.savePlaceAssociations.mock.calls[0])).not.toMatch(/One|Two|latitude|longitude|cafe|park/)
+    expect(repo.savePlaceAssociations).toHaveBeenCalledWith('user-1', '11111111-1111-4111-8111-111111111111', 'REST_STOP', [{ placeId: 'place-1', ordinal: 0 }])
+    expect(result.restStopCandidates).toMatchObject({ status: 'AVAILABLE', candidates: [{ id: 'place-1', associationId: 'association-1' }] })
+    expect(result.restStopCandidates).not.toMatchObject({ candidates: expect.arrayContaining([expect.objectContaining({ id: 'place-2' })]) })
+    expect(JSON.stringify(repo.savePlaceAssociations.mock.calls[0])).not.toMatch(/Near route|latitude|longitude|cafe|park/)
   })
 
   it('matches active reports within 100 meters and reports fewer confirmed report signals without safety claims', async () => {
@@ -135,11 +136,29 @@ describe('route comparison service', () => {
     expect(result.cleanestDeparture).toBe(30)
   })
 
+  it('keeps current routes usable when air quality is temporarily unavailable', async () => {
+    const repo = repository()
+    airQualityMock.mockRejectedValue(new AppError(503, 'air_quality_provider_unavailable', 'Air quality timed out.', true))
+
+    const result = await new RouteComparisonService(repo, roadReports() as never).compare(baseInput, 'user-1')
+
+    expect(result).toMatchObject({ persisted: false, cleanestDeparture: null, routes: [expect.objectContaining({ dataQuality: 'unavailable', averagePm25: null, estimatedExposureIndex: null, reductionFromFastestPercent: null, labels: ['FASTEST', 'RECOMMENDED'] })], warnings: expect.arrayContaining(['PM2.5 data is temporarily unavailable; routes are ranked without air-quality exposure.']) })
+    expect(repo.create).not.toHaveBeenCalled()
+  })
+
+  it('degrades a definitive future transit gap without failing current routes', async () => {
+    routesMock.mockResolvedValueOnce([providerRoute('route_1')]).mockRejectedValueOnce(new AppError(422, 'transit_route_unavailable', 'No transit.', false))
+    const result = await new RouteComparisonService(repository(), roadReports() as never).compare({ ...baseInput, mode: 'TRANSIT', departureOffsetsMinutes: [0, 30] }, 'user-1')
+
+    expect(result.routes).toHaveLength(1)
+    expect(result.departureComparisons).toEqual(expect.arrayContaining([expect.objectContaining({ offsetMinutes: 30, status: 'UNAVAILABLE' })]))
+  })
+
   it('degrades rest-stop provider status and future AQ windows without failing current routes', async () => {
     airQualityMock.mockResolvedValueOnce(airQuality(12)).mockRejectedValueOnce(new AppError(503, 'air_quality_unavailable', 'down', true))
     placesMock.mockResolvedValue({ status: 'UNAVAILABLE', candidates: [], warning: 'Rest-stop candidates are temporarily unavailable.' })
     const result = await new RouteComparisonService(repository(), roadReports() as never).compare({ ...baseInput, departureOffsetsMinutes: [0, 30] }, 'user-1')
-    expect(result.departureComparisons).toEqual(expect.arrayContaining([expect.objectContaining({ offsetMinutes: 30, status: 'UNAVAILABLE', approximate: true, temporalResolution: 'HOURLY_BUCKET' })]))
+    expect(result.departureComparisons).toEqual(expect.arrayContaining([expect.objectContaining({ offsetMinutes: 30, status: 'AVAILABLE', approximate: true, temporalResolution: 'HOURLY_BUCKET', routes: [expect.objectContaining({ dataQuality: 'unavailable', averagePm25: null })] })]))
     expect(result.restStopCandidates.status).toBe('UNAVAILABLE')
     expect(result.warnings).toContain('Rest-stop candidates are temporarily unavailable.')
   })

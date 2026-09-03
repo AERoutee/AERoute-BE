@@ -4,10 +4,12 @@ import { AppError } from '../../middleware/index.js'
 import type { RankedRoute } from './exposure.service.js'
 import type { RouteComparisonRequest } from './route-comparison.validation.js'
 
+type PersistableRoute = RankedRoute & { estimatedExposureIndex: number; averagePm25: number; reductionFromFastestPercent: number; airQualityTimestamp: string; dataQuality: 'modeled_estimate' | 'partial_estimate' }
+
 export type StoredComparison = {
   userId: string
   input: RouteComparisonRequest
-  routes: RankedRoute[]
+  routes: PersistableRoute[]
   calculationVersion: string
 }
 

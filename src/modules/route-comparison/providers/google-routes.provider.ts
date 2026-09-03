@@ -4,25 +4,26 @@ import { AppError } from '../../../middleware/index.js'
 import type { RouteComparisonRequest } from '../route-comparison.validation.js'
 
 const locationSchema = z.object({ latLng: z.object({ latitude: z.number(), longitude: z.number() }) })
-const stopSchema = z.object({ name: z.string(), location: locationSchema.optional() })
+const stopSchema = z.object({ name: z.string().nullish(), location: locationSchema.nullish() })
 const transitDetailsSchema = z.object({
-  stopDetails: z.object({ departureStop: stopSchema.optional(), arrivalStop: stopSchema.optional(), departureTime: z.string().optional(), arrivalTime: z.string().optional() }).optional(),
-  headsign: z.string().optional(),
+  stopDetails: z.object({ departureStop: stopSchema.nullish(), arrivalStop: stopSchema.nullish(), departureTime: z.string().nullish(), arrivalTime: z.string().nullish() }).nullish(),
+  headsign: z.string().nullish(),
   transitLine: z.object({
-    name: z.string().optional(),
-    nameShort: z.string().optional(),
-    vehicle: z.object({ type: z.string(), name: z.object({ text: z.string() }).optional() }).optional(),
-  }).optional(),
-  stopCount: z.number().int().nonnegative().optional(),
+    name: z.string().nullish(),
+    nameShort: z.string().nullish(),
+    vehicle: z.object({ type: z.string().nullish(), name: z.object({ text: z.string().nullish() }).nullish() }).nullish(),
+  }).nullish(),
+  stopCount: z.number().int().nonnegative().nullish(),
 })
 const stepSchema = z.object({
   travelMode: z.string(),
-  staticDuration: z.string().regex(/^\d+(?:\.\d+)?s$/).optional(),
-  distanceMeters: z.number().nonnegative().optional(),
-  startLocation: locationSchema.optional(),
-  endLocation: locationSchema.optional(),
-  polyline: z.object({ encodedPolyline: z.string().min(1) }).optional(),
-  transitDetails: transitDetailsSchema.optional(),
+  staticDuration: z.string().regex(/^\d+(?:\.\d+)?s$/).nullish(),
+  distanceMeters: z.number().nonnegative().nullish(),
+  startLocation: locationSchema.nullish(),
+  endLocation: locationSchema.nullish(),
+  polyline: z.object({ encodedPolyline: z.string().min(1).nullish() }).nullish(),
+  navigationInstruction: z.object({ instructions: z.string().trim().min(1).nullish(), maneuver: z.string().nullish() }).nullish(),
+  transitDetails: transitDetailsSchema.nullish(),
 })
 const googleErrorSchema = z.object({ error: z.object({ status: z.string().optional() }) })
 const responseSchema = z.object({
@@ -30,13 +31,23 @@ const responseSchema = z.object({
     distanceMeters: z.number().nonnegative(),
     duration: z.string().regex(/^\d+(?:\.\d+)?s$/),
     polyline: z.object({ encodedPolyline: z.string().min(1) }),
-    routeLabels: z.array(z.string()).optional(),
-    warnings: z.array(z.string()).optional(),
-    legs: z.array(z.object({ steps: z.array(stepSchema).optional() })).optional(),
+    routeLabels: z.array(z.string()).nullish(),
+    warnings: z.array(z.string()).nullish(),
+    legs: z.array(z.object({ steps: z.array(stepSchema).nullish() })).nullish(),
   })).min(1),
 })
 
 type Station = { name: string; location?: { latitude: number; longitude: number } }
+export type NavigationStep = {
+  instruction: string
+  maneuver?: string
+  travelMode: string
+  durationSeconds?: number
+  distanceMeters?: number
+  encodedPolyline?: string
+  startLocation?: { latitude: number; longitude: number }
+  endLocation?: { latitude: number; longitude: number }
+}
 export type TransitSegment = {
   travelMode: string
   durationSeconds?: number
@@ -44,6 +55,8 @@ export type TransitSegment = {
   encodedPolyline?: string
   startLocation?: { latitude: number; longitude: number }
   endLocation?: { latitude: number; longitude: number }
+  instruction?: string
+  maneuver?: string
   lineName?: string
   lineShortName?: string
   vehicleType?: string
@@ -78,6 +91,7 @@ export type ProviderRoute = {
   encodedPolyline: string
   providerLabels: string[]
   warnings?: string[]
+  navigationSteps?: NavigationStep[]
   transitSummary?: TransitSummary
   composition?: 'PROVIDER_SEGMENTS'
   scheduleStatus?: 'SCHEDULE_VALIDATED'
@@ -87,15 +101,39 @@ export type ProviderRoute = {
 type RouteRequest = Pick<RouteComparisonRequest, 'origin' | 'destination' | 'mode' | 'accessibilityMode'> & Partial<Pick<RouteComparisonRequest, 'transitModes' | 'transitPreference'>>
 type RouteOptions = { computeAlternativeRoutes?: boolean }
 
-const FIELD_MASK = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.routeLabels,routes.warnings,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.distanceMeters,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.polyline.encodedPolyline,routes.legs.steps.transitDetails.stopDetails.departureStop,routes.legs.steps.transitDetails.stopDetails.arrivalStop,routes.legs.steps.transitDetails.stopDetails.departureTime,routes.legs.steps.transitDetails.stopDetails.arrivalTime,routes.legs.steps.transitDetails.transitLine,routes.legs.steps.transitDetails.headsign,routes.legs.steps.transitDetails.stopCount'
+const FIELD_MASK = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.routeLabels,routes.warnings,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.distanceMeters,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.polyline.encodedPolyline,routes.legs.steps.navigationInstruction.instructions,routes.legs.steps.navigationInstruction.maneuver,routes.legs.steps.transitDetails.stopDetails.departureStop,routes.legs.steps.transitDetails.stopDetails.arrivalStop,routes.legs.steps.transitDetails.stopDetails.departureTime,routes.legs.steps.transitDetails.stopDetails.arrivalTime,routes.legs.steps.transitDetails.transitLine,routes.legs.steps.transitDetails.headsign,routes.legs.steps.transitDetails.stopCount'
 
 function seconds(duration: string | undefined) {
   return duration ? Number.parseFloat(duration) : 0
 }
 
-function station(value: z.infer<typeof stopSchema> | undefined): Station | undefined {
-  if (!value) return undefined
+function station(value: z.infer<typeof stopSchema> | null | undefined): Station | undefined {
+  if (!value?.name) return undefined
   return { name: value.name, ...(value.location ? { location: value.location.latLng } : {}) }
+}
+
+function maneuverInstruction(maneuver: string | null | undefined) {
+  if (!maneuver) return undefined
+  const instructions: Record<string, string> = {
+    DEPART: 'Mulai perjalanan', STRAIGHT: 'Lanjut lurus', RAMP_LEFT: 'Ambil jalur kiri', RAMP_RIGHT: 'Ambil jalur kanan', MERGE: 'Bergabung ke jalur', FORK_LEFT: 'Ambil cabang kiri', FORK_RIGHT: 'Ambil cabang kanan', FERRY: 'Naik feri', FERRY_TRAIN: 'Naik kereta feri', ROUNDABOUT_LEFT: 'Masuk bundaran ke kiri', ROUNDABOUT_RIGHT: 'Masuk bundaran ke kanan', TURN_LEFT: 'Belok kiri', TURN_RIGHT: 'Belok kanan', TURN_SLIGHT_LEFT: 'Belok sedikit ke kiri', TURN_SLIGHT_RIGHT: 'Belok sedikit ke kanan', TURN_SHARP_LEFT: 'Belok tajam ke kiri', TURN_SHARP_RIGHT: 'Belok tajam ke kanan', UTURN_LEFT: 'Putar balik ke kiri', UTURN_RIGHT: 'Putar balik ke kanan', ARRIVE: 'Tiba di tujuan', ARRIVE_LEFT: 'Tujuan berada di kiri', ARRIVE_RIGHT: 'Tujuan berada di kanan',
+  }
+  return instructions[maneuver] ?? 'Lanjutkan perjalanan'
+}
+
+function navigationSteps(legs: z.infer<typeof responseSchema>['routes'][number]['legs']): NavigationStep[] {
+  return (legs?.flatMap((leg) => leg.steps ?? []) ?? []).flatMap((step) => {
+    const instruction = step.navigationInstruction?.instructions ?? maneuverInstruction(step.navigationInstruction?.maneuver)
+    return instruction ? [{
+      instruction,
+      ...(step.navigationInstruction?.maneuver ? { maneuver: step.navigationInstruction.maneuver } : {}),
+      travelMode: step.travelMode,
+      ...(step.staticDuration ? { durationSeconds: seconds(step.staticDuration) } : {}),
+      ...(step.distanceMeters != null ? { distanceMeters: step.distanceMeters } : {}),
+      ...(step.polyline?.encodedPolyline ? { encodedPolyline: step.polyline.encodedPolyline } : {}),
+      ...(step.startLocation ? { startLocation: step.startLocation.latLng } : {}),
+      ...(step.endLocation ? { endLocation: step.endLocation.latLng } : {}),
+    }] : []
+  })
 }
 
 function transitSummary(legs: z.infer<typeof responseSchema>['routes'][number]['legs'], preferredTransitModes?: string[]): TransitSummary {
@@ -103,13 +141,16 @@ function transitSummary(legs: z.infer<typeof responseSchema>['routes'][number]['
   const segments = steps.map((step): TransitSegment => {
     const departureStop = station(step.transitDetails?.stopDetails?.departureStop)
     const arrivalStop = station(step.transitDetails?.stopDetails?.arrivalStop)
+    const instruction = step.navigationInstruction?.instructions ?? maneuverInstruction(step.navigationInstruction?.maneuver)
     return {
       travelMode: step.travelMode,
       ...(step.staticDuration ? { durationSeconds: seconds(step.staticDuration) } : {}),
-      ...(step.distanceMeters !== undefined ? { distanceMeters: step.distanceMeters } : {}),
-      ...(step.polyline ? { encodedPolyline: step.polyline.encodedPolyline } : {}),
+      ...(step.distanceMeters != null ? { distanceMeters: step.distanceMeters } : {}),
+      ...(step.polyline?.encodedPolyline ? { encodedPolyline: step.polyline.encodedPolyline } : {}),
       ...(step.startLocation ? { startLocation: step.startLocation.latLng } : {}),
       ...(step.endLocation ? { endLocation: step.endLocation.latLng } : {}),
+      ...(instruction ? { instruction } : {}),
+      ...(step.navigationInstruction?.maneuver ? { maneuver: step.navigationInstruction.maneuver } : {}),
       ...(step.transitDetails?.transitLine?.name ? { lineName: step.transitDetails.transitLine.name } : {}),
       ...(step.transitDetails?.transitLine?.nameShort ? { lineShortName: step.transitDetails.transitLine.nameShort } : {}),
       ...(step.transitDetails?.transitLine?.vehicle?.type ? { vehicleType: step.transitDetails.transitLine.vehicle.type } : {}),
@@ -118,7 +159,7 @@ function transitSummary(legs: z.infer<typeof responseSchema>['routes'][number]['
       ...(step.transitDetails?.stopDetails?.arrivalTime ? { arrivalTime: step.transitDetails.stopDetails.arrivalTime } : {}),
       ...(departureStop ? { departureStop } : {}),
       ...(arrivalStop ? { arrivalStop } : {}),
-      ...(step.transitDetails?.stopCount !== undefined ? { stopCount: step.transitDetails.stopCount } : {}),
+      ...(step.transitDetails?.stopCount != null ? { stopCount: step.transitDetails.stopCount } : {}),
     }
   })
   const walkingSegments = segments.filter((segment) => segment.travelMode === 'WALK')
@@ -153,7 +194,7 @@ async function requestRoutes(input: RouteRequest, departureOffsetMinutes: number
       travelMode: input.mode,
       computeAlternativeRoutes: options.computeAlternativeRoutes ?? true,
       polylineQuality: 'HIGH_QUALITY',
-      languageCode: 'en',
+      languageCode: 'id',
       units: 'METRIC',
       ...(isTransit ? {
         departureTime: new Date(now.getTime() + departureOffsetMinutes * 60_000).toISOString(),
@@ -185,6 +226,7 @@ async function requestRoutes(input: RouteRequest, departureOffsetMinutes: number
     encodedPolyline: route.polyline.encodedPolyline,
     providerLabels: route.routeLabels ?? [],
     ...(route.warnings ? { warnings: route.warnings } : {}),
+    ...(navigationSteps(route.legs).length ? { navigationSteps: navigationSteps(route.legs) } : {}),
     ...(isTransit ? { transitSummary: transitSummary(route.legs, input.transitModes) } : {}),
   }))
 }

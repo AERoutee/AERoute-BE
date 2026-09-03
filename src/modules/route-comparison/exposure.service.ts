@@ -1,4 +1,4 @@
-import type { TransitSummary } from './providers/google-routes.provider.js'
+import type { NavigationStep, TransitSummary } from './providers/google-routes.provider.js'
 import type { AccessibilityMode, HazardPolicy } from './route-comparison.validation.js'
 import type { WeatherConditions } from './weather-advisory.service.js'
 
@@ -18,23 +18,24 @@ export type RouteCandidate = {
   distanceMeters: number
   encodedPolyline: string
   providerLabels: string[]
-  averagePm25: number
-  airQualityTimestamp: string
-  dataQuality: 'modeled_estimate' | 'partial_estimate'
+  averagePm25: number | null
+  airQualityTimestamp: string | null
+  dataQuality: 'modeled_estimate' | 'partial_estimate' | 'unavailable'
   airQualitySampleCount: number
   airQualityExpectedSampleCount: number
   airQualitySamples: Array<{ latitude: number; longitude: number; pm25: number }>
   hazardSummary: HazardSummary
   heatUv: unknown
   weatherConditions: WeatherConditions[]
+  navigationSteps?: NavigationStep[]
   transitSummary?: TransitSummary
 }
 export type RouteLabel = 'FASTEST' | 'RECOMMENDED' | 'LOWEST_EXPOSURE'
 export type RankedRoute = RouteCandidate & {
   labels: RouteLabel[]
-  estimatedExposureIndex: number
-  reductionFromFastestPercent: number
-  reductionPercent: number
+  estimatedExposureIndex: number | null
+  reductionFromFastestPercent: number | null
+  reductionPercent: number | null
   exposureUnit: 'ug_m3_minutes'
   confidence: {
     score: number
@@ -49,7 +50,7 @@ export type RankedRoute = RouteCandidate & {
 }
 
 type RankingOptions = { preference: 'balanced' | 'lower-exposure'; sensitiveUser: boolean; hazardPolicy: HazardPolicy; accessibilityMode: AccessibilityMode }
-const exposure = (route: RouteCandidate) => route.averagePm25 * route.durationSeconds / 60
+const exposure = (route: RouteCandidate) => route.averagePm25 === null ? null : route.averagePm25 * route.durationSeconds / 60
 const compareId = (left: RouteCandidate, right: RouteCandidate) => left.id.localeCompare(right.id)
 
 function confidence(route: RouteCandidate) {
@@ -58,7 +59,7 @@ function confidence(route: RouteCandidate) {
   const factors = { airQualityCoverage, weatherCoverage, hazardCoverage: 15, routeProvider: 15 }
   const score = Object.values(factors).reduce((total, value) => total + value, 0)
   const limitations = [
-    ...(route.airQualitySampleCount < route.airQualityExpectedSampleCount ? ['Air quality is based on partial route sampling.'] : []),
+    ...(route.dataQuality === 'unavailable' ? ['Air quality is unavailable for this route.'] : route.airQualitySampleCount < route.airQualityExpectedSampleCount ? ['Air quality is based on partial route sampling.'] : []),
     ...(weatherCoverage < 20 ? ['Weather is unavailable at one or more sampled checkpoints.'] : []),
     ...route.hazardSummary.limitations,
   ]
@@ -68,14 +69,15 @@ function confidence(route: RouteCandidate) {
 export function rankRoutes(routes: RouteCandidate[], options: RankingOptions): RankedRoute[] {
   if (!routes.length) return []
   const byDuration = (left: RouteCandidate, right: RouteCandidate) => left.durationSeconds - right.durationSeconds || compareId(left, right)
-  const byExposure = (left: RouteCandidate, right: RouteCandidate) => exposure(left) - exposure(right) || left.durationSeconds - right.durationSeconds || compareId(left, right)
+  const byExposure = (left: RouteCandidate, right: RouteCandidate) => (exposure(left) ?? Number.POSITIVE_INFINITY) - (exposure(right) ?? Number.POSITIVE_INFINITY) || left.durationSeconds - right.durationSeconds || compareId(left, right)
   const fastest = [...routes].sort(byDuration)[0]
-  const strong = routes.filter((route) => route.airQualitySampleCount >= 3)
-  const qualityEligible = strong.length ? strong : routes
-  const lowestExposure = [...qualityEligible].sort(byExposure)[0] ?? fastest
+  const measured = routes.filter((route) => route.averagePm25 !== null)
+  const strong = measured.filter((route) => route.airQualitySampleCount >= 3)
+  const qualityEligible = strong.length ? strong : measured
+  const lowestExposure = [...qualityEligible].sort(byExposure)[0]
   const maximumDuration = fastest.durationSeconds * (options.sensitiveUser ? 1.35 : 1.2)
   const strongWithinDuration = strong.filter((route) => route.durationSeconds <= maximumDuration)
-  const balancedFallback = options.preference === 'balanced' && !strongWithinDuration.length
+  const balancedFallback = measured.length > 0 && options.preference === 'balanced' && !strongWithinDuration.length
   const eligible = strongWithinDuration.length ? strongWithinDuration : [fastest]
   const byBalanced = (left: RouteCandidate, right: RouteCandidate) => {
     if (options.hazardPolicy === 'PREFER_FEWER_REPORTS') {
@@ -84,20 +86,21 @@ export function rankRoutes(routes: RouteCandidate[], options: RankingOptions): R
     }
     return byExposure(left, right)
   }
-  const recommended = (options.preference === 'lower-exposure' ? lowestExposure : [...eligible].sort(byBalanced)[0]) ?? fastest
+  const recommended = options.preference === 'lower-exposure' && lowestExposure ? lowestExposure : measured.length ? [...eligible].sort(byBalanced)[0] : fastest
   const fastestExposure = exposure(fastest)
   return routes.map((route): RankedRoute => {
-    const estimatedExposureIndex = Math.round(exposure(route) * 10) / 10
+    const rawExposure = exposure(route)
+    const estimatedExposureIndex = rawExposure === null ? null : Math.round(rawExposure * 10) / 10
     const labels: RouteLabel[] = []
     if (route.id === fastest.id) labels.push('FASTEST')
     if (route.id === recommended.id) labels.push('RECOMMENDED')
-    if (route.id === lowestExposure.id) labels.push('LOWEST_EXPOSURE')
-    const reductionPercent = fastestExposure === 0 ? 0 : Math.max(0, Math.round((fastestExposure - estimatedExposureIndex) / fastestExposure * 100))
+    if (lowestExposure && route.id === lowestExposure.id) labels.push('LOWEST_EXPOSURE')
+    const reductionPercent = fastestExposure === null || estimatedExposureIndex === null ? null : fastestExposure === 0 ? 0 : Math.max(0, Math.round((fastestExposure - estimatedExposureIndex) / fastestExposure * 100))
     const routeConfidence = confidence(route)
     const reasons = [
-      ...(route.id === recommended.id ? [balancedFallback ? 'No route with strong air-quality sampling was within the balanced duration cap, so the fastest route was selected.' : 'Selected by deterministic duration, report-signal, and modeled-exposure rules.'] : []),
+      ...(route.id === recommended.id ? [measured.length === 0 ? 'Selected by deterministic duration and report-signal rules because air quality is unavailable.' : balancedFallback ? 'No route with strong air-quality sampling was within the balanced duration cap, so the fastest route was selected.' : 'Selected by deterministic duration, report-signal, and modeled-exposure rules.'] : []),
       ...(route.id === fastest.id ? ['Has the shortest provider-estimated duration.'] : []),
-      ...(route.id === lowestExposure.id ? ['Has the lowest eligible modeled PM2.5-time exposure.'] : []),
+      ...(lowestExposure && route.id === lowestExposure.id ? ['Has the lowest eligible modeled PM2.5-time exposure.'] : []),
       `${route.hazardSummary.nearbyCount} active community report signal${route.hazardSummary.nearbyCount === 1 ? '' : 's'} matched within 100 meters.`,
     ]
     return {
@@ -111,7 +114,7 @@ export function rankRoutes(routes: RouteCandidate[], options: RankingOptions): R
       explanation: {
         summary: route.id === recommended.id ? 'Recommended from available route, environment, and community-report evidence.' : 'Alternative retained for comparison.',
         reasons,
-        tradeoffs: [...(route.id === recommended.id && balancedFallback ? ['The fastest fallback has weaker air-quality evidence than preferred for balanced ranking; slower candidates were not selected outside the duration cap.'] : []), `Estimated duration is ${Math.round(route.durationSeconds / 60)} minutes; modeled exposure index is ${estimatedExposureIndex}.`],
+        tradeoffs: [...(route.id === recommended.id && balancedFallback ? ['The fastest fallback has weaker air-quality evidence than preferred for balanced ranking; slower candidates were not selected outside the duration cap.'] : []), estimatedExposureIndex === null ? `Estimated duration is ${Math.round(route.durationSeconds / 60)} minutes; air-quality exposure is unavailable.` : `Estimated duration is ${Math.round(route.durationSeconds / 60)} minutes; modeled exposure index is ${estimatedExposureIndex}.`],
         limitations: routeConfidence.limitations,
         ruleVersion: 'route-ranking-v2',
       },
