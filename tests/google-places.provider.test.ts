@@ -92,7 +92,7 @@ describe('Google Places transit-stop details provider', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('https://places.googleapis.com/v1/places:searchText')
     expect(init).toMatchObject({ method: 'POST', signal: expect.any(AbortSignal), headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': 'places-key', 'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.currentOpeningHours,places.accessibilityOptions,places.restroom,places.parkingOptions,places.googleMapsUri,places.photos' } })
-    expect(JSON.parse(String(init.body))).toEqual({ textQuery: 'Central Station', pageSize: 5, languageCode: 'en', locationBias: { circle: { center: { latitude: -6.2, longitude: 106.8 }, radius: 250 } } })
+    expect(JSON.parse(String(init.body))).toEqual({ textQuery: 'Central Station', pageSize: 5, languageCode: 'id', locationBias: { circle: { center: { latitude: -6.2, longitude: 106.8 }, radius: 250 } } })
   })
 
   it('selects a normalized exact display-name match before earlier Google results', async () => {

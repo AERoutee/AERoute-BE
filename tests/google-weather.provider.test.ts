@@ -22,6 +22,7 @@ describe('Google Weather provider', () => {
     expect(result).toMatchObject({ status: 'available', observedAt: '2026-09-01T11:00:00.000Z', feelsLikeC: 36, targetTime: '2026-09-01T11:01:00.000Z' })
     const url = new URL(String(fetchMock.mock.calls[0][0]))
     expect(Number(url.searchParams.get('hours'))).toBeGreaterThanOrEqual(2)
+    expect(url.searchParams.get('languageCode')).toBe('id')
   })
 
   it('reattaches request-specific target metadata on cache hits', async () => {

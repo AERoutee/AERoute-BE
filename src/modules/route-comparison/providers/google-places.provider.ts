@@ -151,7 +151,7 @@ export async function getTransitStopDetails(input: TransitStopDetailsInput): Pro
       method: 'POST',
       signal: AbortSignal.timeout(env.PROVIDER_TIMEOUT_MS),
       headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': TRANSIT_STOP_FIELD_MASK },
-      body: JSON.stringify({ textQuery: input.name, pageSize: 5, languageCode: 'en', locationBias: { circle: { center: { latitude: input.latitude, longitude: input.longitude }, radius: 250 } } }),
+      body: JSON.stringify({ textQuery: input.name, pageSize: 5, languageCode: 'id', locationBias: { circle: { center: { latitude: input.latitude, longitude: input.longitude }, radius: 250 } } }),
     })
   } catch {
     throw new AppError(503, 'transit_stop_details_unavailable', 'Transit stop details are temporarily unavailable.', true)

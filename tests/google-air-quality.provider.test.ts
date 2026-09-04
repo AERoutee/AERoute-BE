@@ -19,6 +19,7 @@ describe('Google Air Quality provider', () => {
     const result = await getRouteAirQuality(polyline, now, 600, now)
     expect(result).toMatchObject({ averagePm25: 12, temporalResolution: 'CURRENT_CONDITIONS', approximate: false, sampleCount: 5 })
     expect(fetchMock.mock.calls.every(([url]) => String(url).includes('currentConditions:lookup'))).toBe(true)
+    expect(fetchMock.mock.calls.every((call) => JSON.parse(String(call[1].body)).languageCode === 'id')).toBe(true)
   })
 
   it('coalesces concurrent lookups for the same rounded point and time bucket', async () => {

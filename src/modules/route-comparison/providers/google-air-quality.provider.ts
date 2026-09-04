@@ -51,7 +51,7 @@ async function lookup(point: GeoPoint, target: Date, now: Date, forecast: boolea
       method: 'POST',
       signal: AbortSignal.timeout(env.PROVIDER_TIMEOUT_MS),
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ location: point, universalAqi: true, extraComputations: ['POLLUTANT_CONCENTRATION'], languageCode: 'en', ...(forecast ? { dateTime: target.toISOString() } : {}) }),
+      body: JSON.stringify({ location: point, universalAqi: true, extraComputations: ['POLLUTANT_CONCENTRATION'], languageCode: 'id', ...(forecast ? { dateTime: target.toISOString() } : {}) }),
     }).catch(() => { throw new AppError(503, 'air_quality_provider_unavailable', 'Air-quality data is temporarily unavailable.', true) })
     if (!response.ok) throw await providerError(response)
     const payload: unknown = await response.json().catch(() => null)

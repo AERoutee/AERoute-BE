@@ -58,7 +58,7 @@ export async function getForecastWeather(point: Point, target: Date, now = new D
   url.searchParams.set('location.latitude', String(point.latitude))
   url.searchParams.set('location.longitude', String(point.longitude))
   url.searchParams.set('unitsSystem', 'METRIC')
-  url.searchParams.set('languageCode', 'en')
+  url.searchParams.set('languageCode', 'id')
   url.searchParams.set('hours', String(hours))
   url.searchParams.set('pageSize', String(hours))
   const response = await fetch(url, { signal: AbortSignal.timeout(env.PROVIDER_TIMEOUT_MS) }).catch(() => { throw new AppError(503, 'weather_provider_unavailable', 'Weather forecast is unavailable.', true) })
