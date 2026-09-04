@@ -48,16 +48,16 @@
 
 ### Latar Belakang
 
-![Latar Belakang AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/assets/LatarBelakang.png)
+![Latar Belakang AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/LatarBelakang.png)
 
 ### Solusi yang Ditawarkan
 
-![Mockup AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/assets/mockups.png)
-![Solusi yang Ditawarkan](https://raw.githubusercontent.com/AERoutee/.github/main/assets/Solusi.png)
+![Mockup AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/mockups.png)
+![Solusi yang Ditawarkan](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/Solusi.png)
 
 ### Tujuan Projek
 
-![Solusi yang Ditawarkan](https://raw.githubusercontent.com/AERoutee/.github/main/assets/tujuan.png)
+![Solusi yang Ditawarkan](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/tujuan.png)
 
 ---
 
@@ -99,13 +99,13 @@
 
 ### Screenshot Aplikasi
 
-![Screenshot AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/assets/screenshots.png)
+![Screenshot AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/screenshots.png)
 
 ### Video Demo
 
 ## Link Video Demo: https://www.youtube.com/watch?v=qeQefV2TFRI
 
-[![Watch the demo](https://raw.githubusercontent.com/AERoutee/.github/main/assets/thumbnail.png)](https://www.youtube.com/watch?v=qeQefV2TFRI)
+[![Watch the demo](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/thumbnail.png)](https://www.youtube.com/watch?v=qeQefV2TFRI)
 
 ---
 
@@ -115,15 +115,15 @@
 
 #### Frontend
 
-![Tech Stack Frontend AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/assets/frontend.png)
+![Tech Stack Frontend AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/frontend.png)
 
 #### Backend
 
-![Tech Stack Backend AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/assets/backend.png)
+![Tech Stack Backend AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/backend.png)
 
 #### DevOps & Tools
 
-![Tech Stack DevOps & Tools AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/assets/devops.png)
+![Tech Stack DevOps & Tools AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/devops.png)
 
 ### Alasan Pemilihan Teknologi
 
@@ -185,11 +185,11 @@
 
 ### System Architecture
 
-![AERoute System Architecture](https://raw.githubusercontent.com/AERoutee/AERoute-FE/main/assets/Architecture.png)
+![AERoute System Architecture](https://raw.githubusercontent.com/AERoutee/AERoute-FE/main/profile/assets/Architecture.png)
 
 ### Database Schema
 
-![AERoute Entity Relationship Diagram](https://raw.githubusercontent.com/AERoutee/AERoute-FE/main/assets/ERD.png)
+![AERoute Entity Relationship Diagram](https://raw.githubusercontent.com/AERoutee/AERoute-FE/main/profile/assets/ERD.png)
 
 ### Folder Structure
 
@@ -323,7 +323,7 @@ npx prisma validate
 6. Tekan **Compare routes** untuk melihat current, +30, dan +60, lalu periksa explanation, trade-offs, evidence completeness, hazard signals, Break/heat/UV, PM2.5 segment legend, dan limitations.
 7. Pilih route card/polyline. **Start route guidance** aktif hanya dengan live fix yang fresh, akurat, dan dekat origin; transit/composite tidak melakukan auto reroute dan fitur ini bukan turn-by-turn guidance.
 
-![Tutorial melihat dan memilih rute AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/assets/Guide1.png)
+![Tutorial melihat dan memilih rute AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/Guide1.png)
 
 #### Community Report
 
@@ -332,7 +332,7 @@ npx prisma validate
 3. Pengguna lain dapat **Confirm**, **Dispute**, atau menarik verification; pemilik dapat resolve report miliknya.
 4. Evidence score menggabungkan recency, foto, dan confirmation balance; skor bukan bukti kebenaran atau keselamatan.
 
-![Tutorial membuat Community Report AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/assets/Guide2.png)
+![Tutorial membuat Community Report AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/Guide2.png)
 
 #### Mengelola Akun
 
@@ -341,7 +341,7 @@ npx prisma validate
 3. Ubah nama melalui **Edit name**, lalu simpan perubahan.
 4. Akun Google dapat menambahkan password setelah verifikasi email.
 
-![Tutorial mengelola akun AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/assets/Guide3.png)
+![Tutorial mengelola akun AERoute](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/Guide3.png)
 
 #### Insights dan Offline
 
@@ -445,11 +445,11 @@ Tidak ada klaim perintah E2E karena package frontend maupun backend tidak menyed
 
 ## Unit Testing Frontend
 
-![Unit Test FE](https://raw.githubusercontent.com/AERoutee/.github/main/assets/unittest1.jpg)
+![Unit Test FE](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/unittest1.jpg)
 
 ## Unit Testing backend
 
-![Unit Test BE](https://raw.githubusercontent.com/AERoutee/.github/main/assets/unittest2.jpg)
+![Unit Test BE](https://raw.githubusercontent.com/AERoutee/.github/main/profile/assets/unittest2.jpg)
 
 | Repository   | Suites | Tests | Statements | Branches | Functions |  Lines | Status                                       |
 | ------------ | -----: | ----: | ---------: | -------: | --------: | -----: | -------------------------------------------- |
