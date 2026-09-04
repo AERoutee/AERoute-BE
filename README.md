@@ -185,11 +185,11 @@
 
 ### System Architecture
 
-![AERoute System Architecture](https://raw.githubusercontent.com/AERoutee/AERoute-FE/main/profile/assets/Architecture.png)
+![AERoute System Architecture](https://raw.githubusercontent.com/AERoutee/AERoute-FE/main/assets/Architecture.png)
 
 ### Database Schema
 
-![AERoute Entity Relationship Diagram](https://raw.githubusercontent.com/AERoutee/AERoute-FE/main/profile/assets/ERD.png)
+![AERoute Entity Relationship Diagram](https://raw.githubusercontent.com/AERoutee/AERoute-FE/main/assets/ERD.png)
 
 ### Folder Structure
 
