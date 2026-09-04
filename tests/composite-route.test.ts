@@ -125,14 +125,14 @@ describe('bicycle transit walk composition service', () => {
     expect(route.transitSummary.segments.reduce((total: number, segment: { durationSeconds: number }) => total + segment.durationSeconds, 0)).toBeCloseTo(route.durationSeconds, 6)
     expect(decodePolyline(route.encodedPolyline)).toEqual([input.origin, stopA, stopB, stopC, stopD, input.destination])
     expect(route.limitations).toEqual(expect.arrayContaining([
-      expect.stringMatching(/parking.*required.*unverified/i),
-      expect.stringMatching(/onboard bicycle carriage.*unknown/i),
-      expect.stringMatching(/preferred transit modes.*not guaranteed/i),
-      expect.stringMatching(/walk.*bike.*dedicated paths/i),
-      expect.stringMatching(/exposure.*comparative only/i),
-      expect.stringMatching(/hazard signals.*complete displayed geometry.*transit corridor/i),
+      expect.stringMatching(/sepeda.*diparkir.*belum diverifikasi/i),
+      expect.stringMatching(/membawa sepeda.*belum diketahui/i),
+      expect.stringMatching(/moda transit pilihan.*tidak dijamin/i),
+      expect.stringMatching(/jalan kaki.*sepeda.*jalur khusus/i),
+      expect.stringMatching(/paparan.*perbandingan/i),
+      expect.stringMatching(/sinyal bahaya.*seluruh geometri.*koridor transit/i),
     ]))
-    expect(result.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/Google Maps.*walking.*cycling.*beta/i)]))
+    expect(result.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/jalan kaki.*sepeda.*Google Maps.*beta/i)]))
   })
 
   it('preserves feeder, retained transit, transfer, and last-mile navigation instructions in order', async () => {

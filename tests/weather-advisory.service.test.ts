@@ -80,15 +80,15 @@ describe('evaluateWeatherAdvisory', () => {
 describe('summarizeHeatUv', () => {
   it('returns maxima and transparent break recommendations across all checkpoints', () => {
     expect(summarizeHeatUv([{ ...baseWeather, feelsLikeC: 36, uvIndex: 9 }, { ...baseWeather, heatIndexC: 41, uvIndex: 5 }])).toEqual({
-      status: 'AVAILABLE', maxFeelsLikeC: 36, maxHeatIndexC: 41, maxUvIndex: 9, breakRecommendation: 'RECOMMENDED', reasons: ['At least one checkpoint has extreme apparent heat.'],
+      status: 'AVAILABLE', maxFeelsLikeC: 36, maxHeatIndexC: 41, maxUvIndex: 9, breakRecommendation: 'RECOMMENDED', reasons: ['Setidaknya satu titik memiliki suhu terasa ekstrem.'],
     })
   })
 
   it('handles unavailable, consideration, UV, and normal checkpoint sets', () => {
     expect(summarizeHeatUv([{ status: 'unavailable' }])).toMatchObject({ status: 'UNAVAILABLE', breakRecommendation: 'NONE' })
-    expect(summarizeHeatUv([{ ...baseWeather, feelsLikeC: 36 }])).toMatchObject({ breakRecommendation: 'CONSIDER', reasons: ['At least one checkpoint has high apparent heat.'] })
-    expect(summarizeHeatUv([{ ...baseWeather, uvIndex: 11 }])).toMatchObject({ breakRecommendation: 'RECOMMENDED', reasons: ['At least one checkpoint has extreme UV exposure.'] })
-    expect(summarizeHeatUv([{ ...baseWeather, uvIndex: 8 }])).toMatchObject({ breakRecommendation: 'CONSIDER', reasons: ['At least one checkpoint has high UV exposure.'] })
-    expect(summarizeHeatUv([baseWeather])).toMatchObject({ status: 'AVAILABLE', breakRecommendation: 'NONE', reasons: ['No heat or UV break threshold was reached at sampled checkpoints.'] })
+    expect(summarizeHeatUv([{ ...baseWeather, feelsLikeC: 36 }])).toMatchObject({ breakRecommendation: 'CONSIDER', reasons: ['Setidaknya satu titik memiliki suhu terasa tinggi.'] })
+    expect(summarizeHeatUv([{ ...baseWeather, uvIndex: 11 }])).toMatchObject({ breakRecommendation: 'RECOMMENDED', reasons: ['Setidaknya satu titik memiliki paparan UV ekstrem.'] })
+    expect(summarizeHeatUv([{ ...baseWeather, uvIndex: 8 }])).toMatchObject({ breakRecommendation: 'CONSIDER', reasons: ['Setidaknya satu titik memiliki paparan UV tinggi.'] })
+    expect(summarizeHeatUv([baseWeather])).toMatchObject({ status: 'AVAILABLE', breakRecommendation: 'NONE', reasons: ['Tidak ada ambang istirahat akibat panas atau UV yang tercapai pada titik sampel.'] })
   })
 })

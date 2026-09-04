@@ -39,7 +39,7 @@ describe('rankRoutes', () => {
     const unavailable = { ...route('unavailable', 10, 20), averagePm25: null, airQualityTimestamp: null, dataQuality: 'unavailable' as const, airQualitySampleCount: 0, airQualitySamples: [] }
     const result = rankRoutes([unavailable], { preference: 'lower-exposure', sensitiveUser: false, hazardPolicy: 'ADVISORY_ONLY', accessibilityMode: 'STANDARD' })
 
-    expect(result[0]).toMatchObject({ labels: ['FASTEST', 'RECOMMENDED'], averagePm25: null, estimatedExposureIndex: null, reductionFromFastestPercent: null, confidence: { factors: { airQualityCoverage: 0 }, limitations: expect.arrayContaining(['Air quality is unavailable for this route.']) } })
+    expect(result[0]).toMatchObject({ labels: ['FASTEST', 'RECOMMENDED'], averagePm25: null, estimatedExposureIndex: null, reductionFromFastestPercent: null, confidence: { factors: { airQualityCoverage: 0 }, limitations: expect.arrayContaining(['Kualitas udara tidak tersedia untuk rute ini.']) } })
     expect(result[0].labels).not.toContain('LOWEST_EXPOSURE')
     expect(JSON.stringify(result[0].explanation)).not.toMatch(/modeled exposure|PM2\.5-time/i)
   })
@@ -90,7 +90,7 @@ describe('rankRoutes', () => {
     }
     const result = rankRoutes([dirty, clean], { preference: 'lower-exposure', sensitiveUser: false, hazardPolicy: 'ADVISORY_ONLY', accessibilityMode: 'REDUCED_EXERTION' })
     expect(result.find((item) => item.labels.includes('RECOMMENDED'))?.id).toBe('clean')
-    expect(result[0].confidence).toMatchObject({ level: 'LOW', limitations: expect.arrayContaining(['Air quality is based on partial route sampling.', 'Weather is unavailable at one or more sampled checkpoints.']) })
+    expect(result[0].confidence).toMatchObject({ level: 'LOW', limitations: expect.arrayContaining(['Kualitas udara dihitung dari sebagian sampel rute.', 'Cuaca tidak tersedia pada satu atau beberapa titik sampel.']) })
     expect(result[0].accessibility).toMatchObject({ assessment: 'APPROXIMATION' })
   })
 
@@ -99,6 +99,6 @@ describe('rankRoutes', () => {
     fastest.airQualitySampleCount = 2
     const result = rankRoutes([fastest, route('slow-strong', 15, 1)], { preference: 'balanced', sensitiveUser: false, hazardPolicy: 'ADVISORY_ONLY', accessibilityMode: 'STANDARD' })
     const recommended = result.find((item) => item.labels.includes('RECOMMENDED'))
-    expect(recommended).toMatchObject({ id: 'fast-weak', explanation: { reasons: expect.arrayContaining([expect.stringMatching(/duration cap/i)]), tradeoffs: expect.arrayContaining([expect.stringMatching(/weaker air-quality/i)]) } })
+    expect(recommended).toMatchObject({ id: 'fast-weak', explanation: { reasons: expect.arrayContaining([expect.stringMatching(/batas durasi/i)]), tradeoffs: expect.arrayContaining([expect.stringMatching(/bukti kualitas udara yang lebih lemah/i)]) } })
   })
 })

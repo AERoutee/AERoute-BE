@@ -65,7 +65,7 @@ function hazardsForRoute(points: GeoPoint[], reports: ActiveReport[], now: Date)
     nearbyCount: nearby.length,
     confirmedCount: confirmed.length,
     confirmedReportSignalScore: confirmed.reduce((total, report) => total + hazardWeight[report.level] * report.netConfirmations * (report.confidence === 'HIGH' ? 3 : report.confidence === 'MEDIUM' ? 2 : 1), 0),
-    limitations: ['Community reports are evidence signals, may be incomplete, and do not verify route conditions or the absence of hazards.', 'At most 500 active reports inside the combined route bounds are assessed.'],
+    limitations: ['Laporan komunitas adalah sinyal bukti, mungkin tidak lengkap, dan tidak memastikan kondisi rute atau ketiadaan bahaya.', 'Maksimal 500 laporan aktif dalam batas gabungan rute yang dinilai.'],
   }
 }
 
@@ -74,14 +74,14 @@ function unavailableDeparture(offsetMinutes: number, warning: string) {
 }
 
 const COMPOSITE_LIMITATIONS = [
-  'Bicycle parking is required at the first transit stop and is unverified.',
-  'Onboard bicycle carriage is unknown.',
-  'Preferred transit modes are not guaranteed; actual modes are disclosed.',
-  'Walk and bike routes may omit dedicated paths.',
-  'Exposure estimates are comparative only.',
-  'Hazard signals use the complete displayed geometry and may include the transit corridor.',
+  'Sepeda harus diparkir di perhentian transit pertama dan ketersediaannya belum diverifikasi.',
+  'Kebijakan membawa sepeda ke dalam kendaraan transit belum diketahui.',
+  'Moda transit pilihan tidak dijamin; moda yang digunakan akan ditampilkan.',
+  'Rute jalan kaki dan sepeda mungkin tidak mencakup jalur khusus.',
+  'Perkiraan paparan hanya digunakan sebagai perbandingan.',
+  'Sinyal bahaya menggunakan seluruh geometri yang ditampilkan dan dapat mencakup koridor transit.',
 ]
-const ACTIVE_TRAVEL_BETA_WARNING = 'Google Maps walking and cycling routes are in beta and may be incomplete.'
+const ACTIVE_TRAVEL_BETA_WARNING = 'Rute jalan kaki dan sepeda Google Maps masih beta dan mungkin tidak lengkap.'
 
 function appendGeometry(target: GeoPoint[], encodedPolyline: string) {
   const points = decodePolyline(encodedPolyline)
@@ -234,7 +234,7 @@ export class RouteComparisonService {
         return { offset, routes: baseRoutes ?? await getRoutes(input, offset, now) }
       } catch (error) {
         if (offset === 0) throw error
-        return { offset, routes: null, warning: 'Routes are unavailable for this future departure window.' }
+        return { offset, routes: null, warning: 'Rute tidak tersedia untuk waktu keberangkatan mendatang ini.' }
       }
     }))
     const allProviderRoutes = routesByOffset.flatMap((window) => window.routes ?? [])
@@ -283,12 +283,12 @@ export class RouteComparisonService {
       if (providerError && window.offset === 0 && candidateResults.every((result) => result.status === 'rejected')) throw providerError.reason
       const candidates = candidateResults.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
       if (!candidates.length) {
-        const warning = providerError && !providerError.reason.retryable ? `Future air-quality configuration error: ${providerError.reason.code}.` : 'Air-quality forecasts are unavailable for this future departure window.'
+        const warning = providerError && !providerError.reason.retryable ? `Kesalahan konfigurasi kualitas udara untuk waktu mendatang: ${providerError.reason.code}.` : 'Prakiraan kualitas udara tidak tersedia untuk waktu keberangkatan mendatang ini.'
         comparisons.push(unavailableDeparture(window.offset, warning))
         warnings.push(warning)
         continue
       }
-      if (candidates.length < window.routes.length) warnings.push(`Some routes are unavailable for the +${window.offset}-minute departure comparison.`)
+      if (candidates.length < window.routes.length) warnings.push(`Sebagian rute tidak tersedia untuk perbandingan keberangkatan +${window.offset} menit.`)
       const routes = rankRoutes(candidates, { preference: input.preference, sensitiveUser: input.sensitiveUser, hazardPolicy: input.hazardPolicy, accessibilityMode: input.accessibilityMode })
       const recommended = routes.find((route) => route.labels.includes('RECOMMENDED')) ?? routes[0]
       const weatherAdvisory = evaluateWeatherAdvisory(recommended.weatherConditions, input.mode)
@@ -329,9 +329,9 @@ export class RouteComparisonService {
       restStops = { ...restStops, candidates: restStops.candidates.map((candidate, ordinal) => ({ ...candidate, associationId: associationIds.get(ordinal) })) }
     }
     if (restStops.status === 'UNAVAILABLE') warnings.push(restStops.warning)
-    if (airQualityUnavailable) warnings.push('PM2.5 data is temporarily unavailable; routes are ranked without air-quality exposure.')
-    else if (current.routes.some((route) => route.dataQuality === 'partial_estimate')) warnings.push('Some route samples were unavailable; this comparison uses partial air-quality coverage.')
-    if (input.accessibilityMode === 'REDUCED_EXERTION') warnings.push('Reduced exertion is an approximation and does not verify wheelchair access or step-free travel.')
+    if (airQualityUnavailable) warnings.push('Data PM2.5 sementara tidak tersedia; rute diurutkan tanpa paparan kualitas udara.')
+    else if (current.routes.some((route) => route.dataQuality === 'partial_estimate')) warnings.push('Sebagian sampel rute tidak tersedia; perbandingan ini menggunakan cakupan kualitas udara parsial.')
+    if (input.accessibilityMode === 'REDUCED_EXERTION') warnings.push('Upaya lebih ringan merupakan perkiraan dan tidak memverifikasi akses kursi roda atau perjalanan bebas tangga.')
     if (composite) warnings.push(ACTIVE_TRAVEL_BETA_WARNING, ...allProviderRoutes.flatMap((route) => route.warnings ?? []))
     return {
       comparisonId,
@@ -352,11 +352,11 @@ export class RouteComparisonService {
       restStopCandidates: restStops,
       sourceDisclosure: {
         route: 'Google Routes API',
-        airQuality: 'Google Air Quality API current conditions for offset 0 and hourly forecast buckets for future offsets',
-        weather: 'Google Weather API hourly forecasts selected by closest interval to each route checkpoint target time',
-        places: input.includeRestStops ? 'Google Places API Search Along Route candidates' : 'Not requested',
-        communityReports: 'Active AERoute community reports matched within 100 meters of route geometry',
-        temporalResolution: 'Future departure air quality uses HOURLY_BUCKET resolution and is approximate.',
+        airQuality: 'Kondisi saat ini dari Google Air Quality API untuk keberangkatan sekarang dan prakiraan per jam untuk waktu mendatang',
+        weather: 'Prakiraan per jam Google Weather API dipilih berdasarkan interval terdekat dengan waktu target setiap titik rute',
+        places: input.includeRestStops ? 'Kandidat Search Along Route dari Google Places API' : 'Tidak diminta',
+        communityReports: 'Laporan komunitas AERoute aktif yang berjarak maksimal 100 meter dari geometri rute',
+        temporalResolution: 'Kualitas udara untuk keberangkatan mendatang menggunakan resolusi per jam dan bersifat perkiraan.',
         customScore: true as const,
       },
       warnings: Array.from(new Set(warnings)),

@@ -241,7 +241,7 @@ export async function getPlacePhoto(name: string) {
 
 export async function getRestStopCandidates(encodedPolyline: string): Promise<RestStopResult> {
   const apiKey = env.GOOGLE_MAPS_SERVER_KEY
-  if (!apiKey) return { status: 'UNAVAILABLE', candidates: [], warning: 'Rest-stop candidates are unavailable because Places API is not configured.' }
+  if (!apiKey) return { status: 'UNAVAILABLE', candidates: [], warning: 'Kandidat tempat istirahat tidak tersedia karena Places API belum dikonfigurasi.' }
   try {
     const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
@@ -257,6 +257,6 @@ export async function getRestStopCandidates(encodedPolyline: string): Promise<Re
       candidates: (parsed.data.places ?? []).slice(0, 5).map(mappedPlace),
     }
   } catch {
-    return { status: 'UNAVAILABLE', candidates: [], warning: 'Rest-stop candidates are temporarily unavailable.' }
+    return { status: 'UNAVAILABLE', candidates: [], warning: 'Kandidat tempat istirahat sementara tidak tersedia.' }
   }
 }

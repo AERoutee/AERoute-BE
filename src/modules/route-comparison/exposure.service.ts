@@ -59,8 +59,8 @@ function confidence(route: RouteCandidate) {
   const factors = { airQualityCoverage, weatherCoverage, hazardCoverage: 15, routeProvider: 15 }
   const score = Object.values(factors).reduce((total, value) => total + value, 0)
   const limitations = [
-    ...(route.dataQuality === 'unavailable' ? ['Air quality is unavailable for this route.'] : route.airQualitySampleCount < route.airQualityExpectedSampleCount ? ['Air quality is based on partial route sampling.'] : []),
-    ...(weatherCoverage < 20 ? ['Weather is unavailable at one or more sampled checkpoints.'] : []),
+    ...(route.dataQuality === 'unavailable' ? ['Kualitas udara tidak tersedia untuk rute ini.'] : route.airQualitySampleCount < route.airQualityExpectedSampleCount ? ['Kualitas udara dihitung dari sebagian sampel rute.'] : []),
+    ...(weatherCoverage < 20 ? ['Cuaca tidak tersedia pada satu atau beberapa titik sampel.'] : []),
     ...route.hazardSummary.limitations,
   ]
   return { score, level: score >= 80 ? 'HIGH' as const : score >= 55 ? 'MEDIUM' as const : 'LOW' as const, kind: 'EVIDENCE_COMPLETENESS' as const, isProbability: false as const, factors, limitations }
@@ -98,10 +98,10 @@ export function rankRoutes(routes: RouteCandidate[], options: RankingOptions): R
     const reductionPercent = fastestExposure === null || estimatedExposureIndex === null ? null : fastestExposure === 0 ? 0 : Math.max(0, Math.round((fastestExposure - estimatedExposureIndex) / fastestExposure * 100))
     const routeConfidence = confidence(route)
     const reasons = [
-      ...(route.id === recommended.id ? [measured.length === 0 ? 'Selected by deterministic duration and report-signal rules because air quality is unavailable.' : balancedFallback ? 'No route with strong air-quality sampling was within the balanced duration cap, so the fastest route was selected.' : 'Selected by deterministic duration, report-signal, and modeled-exposure rules.'] : []),
-      ...(route.id === fastest.id ? ['Has the shortest provider-estimated duration.'] : []),
-      ...(lowestExposure && route.id === lowestExposure.id ? ['Has the lowest eligible modeled PM2.5-time exposure.'] : []),
-      `${route.hazardSummary.nearbyCount} active community report signal${route.hazardSummary.nearbyCount === 1 ? '' : 's'} matched within 100 meters.`,
+      ...(route.id === recommended.id ? [measured.length === 0 ? 'Dipilih berdasarkan durasi dan sinyal laporan karena kualitas udara tidak tersedia.' : balancedFallback ? 'Tidak ada rute dengan sampel kualitas udara kuat dalam batas durasi seimbang, sehingga rute tercepat dipilih.' : 'Dipilih berdasarkan durasi, sinyal laporan, dan perkiraan paparan.'] : []),
+      ...(route.id === fastest.id ? ['Memiliki durasi perkiraan penyedia yang paling singkat.'] : []),
+      ...(lowestExposure && route.id === lowestExposure.id ? ['Memiliki perkiraan paparan PM2.5 berdasarkan waktu yang paling rendah.'] : []),
+      `${route.hazardSummary.nearbyCount} sinyal laporan komunitas aktif ditemukan dalam jarak 100 meter.`,
     ]
     return {
       ...route,
@@ -112,22 +112,22 @@ export function rankRoutes(routes: RouteCandidate[], options: RankingOptions): R
       exposureUnit: 'ug_m3_minutes',
       confidence: routeConfidence,
       explanation: {
-        summary: route.id === recommended.id ? 'Recommended from available route, environment, and community-report evidence.' : 'Alternative retained for comparison.',
+        summary: route.id === recommended.id ? 'Direkomendasikan berdasarkan rute, kondisi lingkungan, dan bukti laporan komunitas yang tersedia.' : 'Alternatif dipertahankan untuk perbandingan.',
         reasons,
-        tradeoffs: [...(route.id === recommended.id && balancedFallback ? ['The fastest fallback has weaker air-quality evidence than preferred for balanced ranking; slower candidates were not selected outside the duration cap.'] : []), estimatedExposureIndex === null ? `Estimated duration is ${Math.round(route.durationSeconds / 60)} minutes; air-quality exposure is unavailable.` : `Estimated duration is ${Math.round(route.durationSeconds / 60)} minutes; modeled exposure index is ${estimatedExposureIndex}.`],
+        tradeoffs: [...(route.id === recommended.id && balancedFallback ? ['Rute tercepat memiliki bukti kualitas udara yang lebih lemah dari preferensi seimbang; rute lebih lambat tidak dipilih karena melewati batas durasi.'] : []), estimatedExposureIndex === null ? `Perkiraan durasi ${Math.round(route.durationSeconds / 60)} menit; paparan kualitas udara tidak tersedia.` : `Perkiraan durasi ${Math.round(route.durationSeconds / 60)} menit; indeks paparan perkiraan ${estimatedExposureIndex}.`],
         limitations: routeConfidence.limitations,
         ruleVersion: 'route-ranking-v2',
       },
       accessibility: options.accessibilityMode === 'REDUCED_EXERTION' ? {
         mode: options.accessibilityMode,
         assessment: 'APPROXIMATION',
-        reasons: [route.transitSummary ? 'Transit routing prefers less walking unless an explicit transit preference was supplied.' : 'Lower exertion is approximated from route duration and available provider data.'],
-        limitations: ['This is not wheelchair-safe or step-free routing and does not verify barriers, gradients, or lift availability.'],
+        reasons: [route.transitSummary ? 'Rute transit mengutamakan lebih sedikit berjalan kaki kecuali preferensi transit lain dipilih.' : 'Upaya lebih ringan diperkirakan dari durasi rute dan data penyedia yang tersedia.'],
+        limitations: ['Ini bukan rute terverifikasi aman untuk kursi roda atau bebas tangga, serta tidak memverifikasi hambatan, kemiringan, atau ketersediaan lift.'],
       } : {
         mode: options.accessibilityMode,
         assessment: 'STANDARD',
-        reasons: ['No reduced-exertion approximation was requested.'],
-        limitations: ['The route is not verified as wheelchair-safe or step-free.'],
+        reasons: ['Perkiraan upaya lebih ringan tidak diminta.'],
+        limitations: ['Rute belum diverifikasi aman untuk kursi roda atau bebas tangga.'],
       },
     }
   }).sort((left, right) => left.durationSeconds - right.durationSeconds || left.id.localeCompare(right.id))

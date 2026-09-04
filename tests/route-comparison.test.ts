@@ -142,7 +142,7 @@ describe('route comparison service', () => {
 
     const result = await new RouteComparisonService(repo, roadReports() as never).compare(baseInput, 'user-1')
 
-    expect(result).toMatchObject({ persisted: false, cleanestDeparture: null, routes: [expect.objectContaining({ dataQuality: 'unavailable', averagePm25: null, estimatedExposureIndex: null, reductionFromFastestPercent: null, labels: ['FASTEST', 'RECOMMENDED'] })], warnings: expect.arrayContaining(['PM2.5 data is temporarily unavailable; routes are ranked without air-quality exposure.']) })
+    expect(result).toMatchObject({ persisted: false, cleanestDeparture: null, routes: [expect.objectContaining({ dataQuality: 'unavailable', averagePm25: null, estimatedExposureIndex: null, reductionFromFastestPercent: null, labels: ['FASTEST', 'RECOMMENDED'] })], warnings: expect.arrayContaining(['Data PM2.5 sementara tidak tersedia; rute diurutkan tanpa paparan kualitas udara.']) })
     expect(repo.create).not.toHaveBeenCalled()
   })
 
@@ -156,11 +156,11 @@ describe('route comparison service', () => {
 
   it('degrades rest-stop provider status and future AQ windows without failing current routes', async () => {
     airQualityMock.mockResolvedValueOnce(airQuality(12)).mockRejectedValueOnce(new AppError(503, 'air_quality_unavailable', 'down', true))
-    placesMock.mockResolvedValue({ status: 'UNAVAILABLE', candidates: [], warning: 'Rest-stop candidates are temporarily unavailable.' })
+    placesMock.mockResolvedValue({ status: 'UNAVAILABLE', candidates: [], warning: 'Kandidat tempat istirahat sementara tidak tersedia.' })
     const result = await new RouteComparisonService(repository(), roadReports() as never).compare({ ...baseInput, departureOffsetsMinutes: [0, 30] }, 'user-1')
     expect(result.departureComparisons).toEqual(expect.arrayContaining([expect.objectContaining({ offsetMinutes: 30, status: 'AVAILABLE', approximate: true, temporalResolution: 'HOURLY_BUCKET', routes: [expect.objectContaining({ dataQuality: 'unavailable', averagePm25: null })] })]))
     expect(result.restStopCandidates.status).toBe('UNAVAILABLE')
-    expect(result.warnings).toContain('Rest-stop candidates are temporarily unavailable.')
+    expect(result.warnings).toContain('Kandidat tempat istirahat sementara tidak tersedia.')
   })
 
   it('degrades retryable future transit route failures and surfaces permanent future AQ configuration warnings', async () => {
@@ -174,10 +174,10 @@ describe('route comparison service', () => {
     const transitInput = { ...baseInput, mode: 'TRANSIT' as const, departureOffsetsMinutes: [0, 30, 60] as Array<0 | 30 | 60>, accessibilityMode: 'REDUCED_EXERTION' as const }
     const result = await new RouteComparisonService(repository(), roadReports() as never).compare(transitInput, 'user-1')
     expect(result.departureComparisons).toEqual(expect.arrayContaining([
-      expect.objectContaining({ offsetMinutes: 30, status: 'UNAVAILABLE', warning: expect.stringContaining('Routes are unavailable') }),
-      expect.objectContaining({ offsetMinutes: 60, status: 'UNAVAILABLE', warning: expect.stringContaining('configuration error') }),
+      expect.objectContaining({ offsetMinutes: 30, status: 'UNAVAILABLE', warning: expect.stringContaining('Rute tidak tersedia') }),
+      expect.objectContaining({ offsetMinutes: 60, status: 'UNAVAILABLE', warning: expect.stringContaining('Kesalahan konfigurasi') }),
     ]))
-    expect(result.warnings).toContain('Reduced exertion is an approximation and does not verify wheelchair access or step-free travel.')
+    expect(result.warnings).toContain('Upaya lebih ringan merupakan perkiraan dan tidak memverifikasi akses kursi roda atau perjalanan bebas tangga.')
   })
 
   it('rejects malformed provider geometry', async () => {
